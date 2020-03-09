@@ -20,15 +20,26 @@ import (
 	"strings"
 )
 
-type trackerRequest struct {
+type trackerAnnounceRequest struct {
 	Ip        string `json:"ip"`
 	Port      string `json:"port"`
 	Multiaddr string `json:"multiaddr"`
 	Action    string `json:"action"`
 }
 
-type trackerResponse struct {
+type trackerAnnounceResponse struct {
 	ShareId string `json:"shareId"`
+}
+
+type trackerPushRequest struct {
+	ShareId   string `json:"shareId"`
+	Action    string `json:"action"`
+}
+
+type trackerPushResponse struct {
+	Ip        string `json:"ip"`
+	Port      string `json:"port"`
+	Multiaddr string `json:"multiaddr"`
 }
 
 func handleStream(s network.Stream) {
@@ -92,7 +103,7 @@ func getPublicIP() (string, error) {
 	return strings.TrimSpace(string(body)), nil
 }
 
-func announceToTracker(trackerUrl *string, request *trackerRequest) *trackerResponse {
+func announceToTracker(trackerUrl *string, request *trackerAnnounceRequest) *trackerAnnounceResponse {
 	log.Info("Announcing to tracker at: %s", *trackerUrl)
 
 	requestJson, _ := json.Marshal(request)
@@ -115,13 +126,13 @@ func announceToTracker(trackerUrl *string, request *trackerRequest) *trackerResp
 	body, _ := ioutil.ReadAll(resp.Body)
 	log.Debug("response Body:", string(body))
 
-	res := trackerResponse{}
+	res := trackerAnnounceResponse{}
 	json.Unmarshal(body, &res)
 	return &res
 }
 
-func getPeerInfo(shareId *string, trackerUrl *string) {
-	log.Infof("Connecting to %s via %s", *shareId, *trackerUrl)
+func getPeerInfo(request *trackerPushRequest, trackerUrl *string) {
+	log.Infof("Connecting to %s via %s", (*request).ShareId, *trackerUrl)
 }
 
 func main() {
@@ -193,7 +204,7 @@ func main() {
 		if err != nil {
 			log.Debug(err)
 		}
-		request := &trackerRequest{
+		request := &trackerAnnounceRequest{
 			Ip:        publicIp,
 			Port:      port,
 			Multiaddr: host.ID().Pretty(),
@@ -210,7 +221,11 @@ func main() {
 			log.Debug(" - %v\n", la)
 		}
 
-		getPeerInfo(connect, trackerUrl)
+		request := &trackerPushRequest {
+			ShareId: *connect,
+			Action: "push"
+		}
+		getPeerInfo(request, trackerUrl)
 
 		//// Turn the destination into a multiaddr.
 		//maddr, err := multiaddr.NewMultiaddr(*dest)
