@@ -21,9 +21,10 @@ import (
 )
 
 type trackerRequest struct {
-	Ip string `json:"ip"`
-	Port   string      `json:"port"`
+	Ip        string `json:"ip"`
+	Port      string `json:"port"`
 	Multiaddr string `json:"multiaddr"`
+	Action    string `json:"action"`
 }
 
 type trackerResponse struct {
@@ -41,6 +42,7 @@ func handleStream(s network.Stream) {
 
 	// stream 's' will stay open until you close it (or the other side closes it).
 }
+
 func readData(rw *bufio.ReadWriter) {
 	for {
 		str, _ := rw.ReadString('\n')
@@ -73,7 +75,7 @@ func writeData(rw *bufio.ReadWriter) {
 }
 
 func getPublicIP() (string, error) {
-	// ip.cip.cc
+	log.Info("Finding public IP address...")
 	res, err := http.Get("http://ip.cip.cc/")
 	if err != nil {
 		log.Fatal(err)
@@ -91,7 +93,7 @@ func getPublicIP() (string, error) {
 }
 
 func announceToTracker(trackerUrl *string, request *trackerRequest) *trackerResponse {
-	log.Debug("Announce to tracker at: %s", *trackerUrl)
+	log.Info("Announcing to tracker at: %s", *trackerUrl)
 
 	requestJson, _ := json.Marshal(request)
 	log.Debug("JSON: ", string(requestJson))
@@ -119,18 +121,18 @@ func announceToTracker(trackerUrl *string, request *trackerRequest) *trackerResp
 }
 
 func getPeerInfo(shareId *string, trackerUrl *string) {
-	log.Debugf("connect to %s via %s", *shareId, *trackerUrl)
+	log.Infof("Connecting to %s via %s", *shareId, *trackerUrl)
 }
 
 func main() {
-	connect := flag.String("connect", "", "Destination multiaddr string")
-	trackerUrl := flag.String("tracker", "", "full tracker url string")
+	connect := flag.String("connect", "", "Connect to peer by share ID")
+	trackerUrl := flag.String("tracker", "", "Full tracker URL string")
 	help := flag.Bool("help", false, "Display help")
 	flag.Parse()
 
 	if *help {
 		fmt.Println("Usage: Run './chat -tracker <TRACKER_URL>' to announce yourself to tracker.")
-		fmt.Println("       Run './chat -connect <ShareID>' to connect to a peer")
+		fmt.Println("       Run './chat -connect <SHARE_ID> -tracker <TRACKER_URL>' to connect to a peer via tracker")
 		os.Exit(0)
 	}
 
@@ -138,7 +140,7 @@ func main() {
 	Formatter := &log.TextFormatter{
 		EnvironmentOverrideColors: true,
 		FullTimestamp:             true,
-		TimestampFormat:           "2006-01-02 15:04:05",
+		TimestampFormat:           "2020-02-27 00:43:00",
 	}
 	log.SetFormatter(Formatter)
 	log.SetLevel(log.DebugLevel)
@@ -187,19 +189,18 @@ func main() {
 			panic("was not able to find actual local port")
 		}
 
-		fmt.Printf("\nWaiting for incoming connection\n")
-
 		publicIp, err := getPublicIP()
 		if err != nil {
 			log.Debug(err)
 		}
-		request := &trackerRequest {
-			Ip: publicIp,
-			Port: port,
+		request := &trackerRequest{
+			Ip:        publicIp,
+			Port:      port,
 			Multiaddr: host.ID().Pretty(),
+			Action:    "announce",
 		}
 		res := announceToTracker(trackerUrl, request)
-		fmt.Printf("Run './chat -connect %s' on another console.\n", res.ShareId)
+		log.Info("Run './chat -connect %s -tracker %s' on another console.\n", res.ShareId, trackerUrl)
 
 		// Hang forever
 		<-make(chan struct{})
