@@ -1,0 +1,19 @@
+language: go
+
+go: 
+ - 1.13
+ 
+arch:
+  - amd64
+  - arm64
+
+os:
+  - windows
+  - osx
+  - linux
+
+env: GO111MODULE=on
+
+script:
+  - go build
+
