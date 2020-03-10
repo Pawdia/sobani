@@ -15,51 +15,110 @@ import (
 	"strings"
 )
 
+//	{
+//		"action": "announce",
+//		"data": {
+//			"ip": "1.2.3.4",
+//			"port": "12345",
+//			"multiaddr": "0sCFajniCW92aP1fHm49RAhyrKC6uXVj"
+//		}
+//	}
 type trackerAnnounceRequest struct {
+	Data   trackerAnnounceBody `json:"data"`
+	Action string              `json:"action"`
+}
+
+type trackerAnnounceBody struct {
 	IP        string `json:"ip"`
 	Port      string `json:"port"`
 	Multiaddr string `json:"multiaddr"`
-	Action    string `json:"action"`
 }
 
-type trackerAnnounceResponseData struct {
-	ShareID string `json:"shareId"`
-}
-
+//	{
+//		"action": "announceReceived",
+//	 	"data": {
+//			"shareId": "1AbhoECj"
+//		}
+//	}
 type trackerAnnounceResponse struct {
 	Action string                      `json:"action"`
-	Data   trackerAnnounceResponseData `json:"data"`
+	Data   trackerAnnounceResponseBody `json:"data"`
 }
 
+type trackerAnnounceResponseBody struct {
+	ShareID string `json:"shareId"`
+}
+
+//	{
+//		"action": "pulse",
+//		"data": {
+//			"override": true,
+//			"ip": "1.2.3.4",
+//			"port": "12345",
+//			"multiaddr": "0sCFajniCW92aP1fHm49RAhyrKC6uXVj"
+//		}
+//	}
 type trackerPulseRequest struct {
-	Action string            `json:"action"`
-	Data   map[string]string `json:"data"`
+	Action string           `json:"action"`
+	Data   trackerPulseBody `json:"data"`
 }
 
+type trackerPulseBody struct {
+	Override  *bool   `json:"override,omitempty"`
+	IP        *string `json:"ip,omitempty"`
+	Port      *string `json:"port,omitempty"`
+	Multiaddr *string `json:"multiaddr,omitempty"`
+	ShareID   *bool   `json:"shareId,omitempty"`
+}
+
+//	{
+//		"action": "pulseReceived",
+//		"data": true
+//	}
 type trackerPulseResponse struct {
 	Action string `json:"action"`
+	Data   *bool  `json:"data"`
 }
 
+//	{
+//		"action": "push",
+//		"data": {
+//			"shareId": "0sCFajniCW92aP1fHm49RAhyrKC6uXVj"
+//		}
+//	}
 type trackerPushRequest struct {
-	ShareID string `json:"shareId"`
-	Action  string `json:"action"`
+	Action string          `json:"action"`
+	Data   trackerPushBody `json:"data"`
 }
 
-type trackerPushResponseData struct {
+type trackerPushBody struct {
+	Multiaddr string `json:"multiaddr"`
+	ShareID   string `json:"shareId"`
+}
+
+//	{
+//		"action": "pushReceived",
+//		"data": {
+//			"multiaddr": "ip4/0.0.0.0/tcp/8080/p2p/0sCFajniCW92aP1fHm49RAhyrKC6uXVj"
+//		}
+//	}
+type trackerPushResponse struct {
+	Action string                  `json:"action"`
+	Data   trackerPushResponseBody `json:"data"`
+}
+
+type trackerPushResponseBody struct {
 	Multiaddr string `json:"multiaddr"`
 }
 
-type trackerPushResponse struct {
-	Action string                  `json:"action"`
-	Data   trackerPushResponseData `json:"data"`
-}
-
+// Sobani Peer
 type sobaniPeer struct {
 	IP        string
 	Port      string
 	Multiaddr string
 }
 
+// Creates a new sobani peer
 func newSobaniPeer() (*sobaniPeer, error) {
 	peer := &sobaniPeer{}
 
@@ -120,11 +179,14 @@ func newSobaniPeer() (*sobaniPeer, error) {
 func (peer *sobaniPeer) announceToTracker(trackerURL *string) (*trackerAnnounceResponse, error) {
 	logrus.Info("Announcing to tracker at: %s", *trackerURL)
 
-	request := &trackerAnnounceRequest{
+	requestBody := &trackerAnnounceBody{
 		IP:        peer.IP,
 		Port:      peer.Port,
 		Multiaddr: peer.Multiaddr,
-		Action:    "announce",
+	}
+	request := &trackerAnnounceRequest{
+		Action: "announce",
+		Data:   *requestBody,
 	}
 
 	requestJSON, _ := json.Marshal(request)
@@ -150,9 +212,13 @@ func (peer *sobaniPeer) announceToTracker(trackerURL *string) (*trackerAnnounceR
 func (peer *sobaniPeer) getPeerInfo(shareID *string, trackerURL *string) (*trackerPushResponse, error) {
 	logrus.Infof("Connecting to %s via %s", *shareID, *trackerURL)
 
+	requestBody := &trackerPushBody{
+		Multiaddr: peer.Multiaddr,
+		ShareID:   *shareID,
+	}
 	request := &trackerPushRequest{
-		ShareID: *shareID,
-		Action:  "push",
+		Action: "push",
+		Data:   *requestBody,
 	}
 
 	requestJSON, _ := json.Marshal(request)
@@ -194,7 +260,10 @@ func getPublicIP() (*string, error) {
 	return &ip, nil
 }
 
+// This function will try to post data to tracker
+// It returns the response from the given tracker and any error encountered.
 func postToTracker(data *[]byte, trackerURL *string) (*[]byte, error) {
+	logrus.Debugf("POST `%s` to %s\n", string(*data), *trackerURL)
 	req, err := http.NewRequest("POST", *trackerURL, bytes.NewBuffer(*data))
 	if err != nil {
 		return nil, err
