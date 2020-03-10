@@ -82,12 +82,12 @@ func main() {
 	}
 
 	setupLog(debug)
-	peer, err := newSobaniPeer()
+	peer, err := newSobaniPeer(trackerURL)
 	if err != nil {
 		// todo: retry
 		panic(err)
 	}
-	res, err := peer.announceToTracker(trackerURL)
+	res, err := peer.announceToTracker()
 	if err != nil {
 		// todo: retry
 		panic(err)
@@ -99,9 +99,9 @@ func main() {
 		// Hang forever
 		<-make(chan struct{})
 	} else {
-		info, err := peer.getPeerInfo(connect, trackerURL)
+		info, err := peer.getPeerInfo(connect)
 		if err != nil {
-			logrus.Errorf("Cannot get peer `%s` from %s", *connect, *trackerURL)
+			logrus.Errorf("Cannot get peer `%s` from %s", *connect, peer.TrackerURL)
 		} else {
 			fmt.Println(info)
 			logrus.Debug("Peer Info", info)
