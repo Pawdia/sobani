@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -113,10 +114,11 @@ type trackerPushResponseBody struct {
 
 // Sobani Peer
 type sobaniPeer struct {
-	IP        string
-	Port      string
-	Multiaddr string
+	IP         string
+	Port       string
+	Multiaddr  string
 	TrackerURL string
+	Host       *host.Host
 }
 
 // Creates a new sobani peer
@@ -145,6 +147,7 @@ func newSobaniPeer(trackerURL *string) (*sobaniPeer, error) {
 		logrus.Fatal(err)
 		return nil, err
 	}
+	peer.Host = &host
 
 	// Set a function as stream handler.
 	// This function is called when a peer connects, and starts a stream with this protocol.

@@ -2,9 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"github.com/libp2p/go-libp2p-core/network"
+	p2ppeer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peerstore"
+	"github.com/multiformats/go-multiaddr"
 	"github.com/sirupsen/logrus"
 	"os"
 )
@@ -95,7 +99,6 @@ func main() {
 
 	if *connect == "" {
 		logrus.Info("Run './chat -connect %s -tracker %s' on another console.\n", res.Data.ShareID, trackerURL)
-
 		// Hang forever
 		<-make(chan struct{})
 	} else {
@@ -103,41 +106,41 @@ func main() {
 		if err != nil {
 			logrus.Errorf("Cannot get peer `%s` from %s", *connect, peer.TrackerURL)
 		} else {
-			fmt.Println(info)
-			logrus.Debug("Peer Info", info)
-		}
+			logrus.Debugln("Peer Info", info)
 
-		//// Turn the destination into a multiaddr.
-		//maddr, err := multiaddr.NewMultiaddr(*dest)
-		//if err != nil {
-		//	log.Fatalln(err)
-		//}
-		//
-		//// Extract the peer ID from the multiaddr.
-		//info, err := peer.AddrInfoFromP2pAddr(maddr)
-		//if err != nil {
-		//	log.Fatalln(err)
-		//}
-		//
-		//// Add the destination's peer multiaddress in the peerstore.
-		//// This will be used during connection and stream creation by libp2p.
-		//host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
-		//
-		//// Start a stream with the destination.
-		//// Multiaddress of the destination peer is fetched from the peerstore using 'peerId'.
-		//s, err := host.NewStream(context.Background(), info.ID, "/chat/1.0.0")
-		//if err != nil {
-		//	panic(err)
-		//}
-		//
-		//// Create a buffered stream so that read and writes are non blocking.
-		//rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-		//
-		//// Create a thread to read and write data.
-		//go writeData(rw)
-		//go readData(rw)
-		//
-		//// Hang forever.
-		//select {}
+			// Turn the destination into a multiaddr.
+			maddr, err := multiaddr.NewMultiaddr(info.Data.Multiaddr)
+			if err != nil {
+				logrus.Fatalln(err)
+			}
+
+			// Extract the peer ID from the multiaddr.
+			p2pinfo, err := p2ppeer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				logrus.Fatalln(err)
+			}
+
+			// Add the destination's peer multiaddress in the peerstore.
+			// This will be used during connection and stream creation by libp2p.
+
+			(*peer.Host).Peerstore().AddAddrs(p2pinfo.ID, p2pinfo.Addrs, peerstore.PermanentAddrTTL)
+
+			// Start a stream with the destination.
+			// Multiaddress of the destination peer is fetched from the peerstore using 'peerId'.
+			s, err := (*peer.Host).NewStream(context.Background(), p2pinfo.ID, "/sobani/1.0.0")
+			if err != nil {
+				panic(err)
+			}
+
+			// Create a buffered stream so that read and writes are non blocking.
+			rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
+
+			// Create a thread to read and write data.
+			go writeData(rw)
+			go readData(rw)
+
+			// Hang forever.
+			select {}
+		}
 	}
 }
