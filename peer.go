@@ -132,7 +132,7 @@ func newSobaniPeer(trackerURL *string) (*sobaniPeer, error) {
 	}
 	peer.Port = port
 	peer.Multiaddr = host.ID().Pretty()
-
+	
 	publicIP, err := getPublicIP()
 	if err != nil {
 		logrus.Debug(err)
@@ -161,7 +161,7 @@ func (peer *sobaniPeer) announceToTracker() (*trackerAnnounceResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debug("response Body:", string(*body))
+	logrus.Debug("response:", string(*body))
 
 	res := trackerAnnounceResponse{}
 	err = json.Unmarshal(*body, &res)
@@ -186,7 +186,7 @@ func (peer *sobaniPeer) pulse() (*trackerPulseResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debug("response Body:", string(*body))
+	logrus.Debug("response:", string(*body))
 
 	res := trackerPulseResponse{}
 	err = json.Unmarshal(*body, &res)
@@ -214,7 +214,7 @@ func (peer *sobaniPeer) getPeerInfo(shareID *string) (*trackerPushResponse, erro
 	if err != nil {
 		return nil, err
 	}
-	logrus.Debug("response Body:", string(*body))
+	logrus.Debug("response:", string(*body))
 
 	res := trackerPushResponse{}
 	err = json.Unmarshal(*body, &res)

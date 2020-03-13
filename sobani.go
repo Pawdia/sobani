@@ -80,8 +80,8 @@ func main() {
 	flag.Parse()
 
 	if *help {
-		fmt.Println("Usage: Run './chat -tracker <TRACKER_URL>' to announce yourself to tracker.")
-		fmt.Println("       Run './chat -connect <SHARE_ID> -tracker <TRACKER_URL>' to connect to a peer via tracker")
+		fmt.Println("Usage: Run './sobani -tracker <TRACKER_URL>' to announce yourself to tracker.")
+		fmt.Println("       Run './sobani -connect <SHARE_ID> -tracker <TRACKER_URL>' to connect to a peer via tracker")
 		os.Exit(0)
 	}
 
@@ -98,7 +98,7 @@ func main() {
 	}
 
 	if *connect == "" {
-		logrus.Info("Run './chat -connect %s -tracker %s' on another console.\n", res.ShareID, trackerURL)
+		logrus.Infof("Run './sobani -connect %s -tracker %s' on another console.\n", res.ShareID, *trackerURL)
 		// Hang forever
 		<-make(chan struct{})
 	} else {
