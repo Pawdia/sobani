@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -56,8 +57,8 @@ type trackerPulseRequest struct {
 //		"data": true
 //	}
 type trackerPulseResponse struct {
-	Status 		string `json:"status"`
-	Overriden   *bool  `json:"overriden"`
+	Status    string `json:"status"`
+	Overriden *bool  `json:"overriden"`
 }
 
 //	{
@@ -131,14 +132,14 @@ func newSobaniPeer(trackerURL *string) (*sobaniPeer, error) {
 		return nil, errors.New("was not able to find actual local port")
 	}
 	peer.Port = port
-	peer.Multiaddr = host.ID().Pretty()
-	
+
 	publicIP, err := getPublicIP()
 	if err != nil {
 		logrus.Debug(err)
 		return nil, err
 	}
 	peer.IP = *publicIP
+	peer.Multiaddr = fmt.Sprintf("/ip4/%s/tcp/%s/p2p/%s", peer.IP, peer.Port, host.ID().Pretty())
 
 	return peer, nil
 }
