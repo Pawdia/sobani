@@ -98,7 +98,7 @@ func main() {
 	}
 
 	if *connect == "" {
-		logrus.Info("Run './chat -connect %s -tracker %s' on another console.\n", res.Data.ShareID, trackerURL)
+		logrus.Info("Run './chat -connect %s -tracker %s' on another console.\n", res.ShareID, trackerURL)
 		// Hang forever
 		<-make(chan struct{})
 	} else {
@@ -109,7 +109,7 @@ func main() {
 			logrus.Debugln("Peer Info", info)
 
 			// Turn the destination into a multiaddr.
-			maddr, err := multiaddr.NewMultiaddr(info.Data.Multiaddr)
+			maddr, err := multiaddr.NewMultiaddr(info.Multiaddr)
 			if err != nil {
 				logrus.Fatalln(err)
 			}
