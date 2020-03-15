@@ -1,80 +1,108 @@
 package main
 
 import (
-	"bufio"
-	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/network"
-	p2ppeer "github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/peerstore"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+	"net"
 	"os"
+	"time"
 )
 
-func handleStream(s network.Stream) {
-	logrus.Println("Got a new stream!")
-
-	// Create a buffer stream for non blocking read and write.
-	rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-
-	go readData(rw)
-	go writeData(rw)
-
-	// stream 's' will stay open until you close it (or the other side closes it).
+//	{
+//      "action": "pulse",
+//		"override": true,
+//		"shareId": "73756b69"
+//	}
+type trackerPulseRequest struct {
+	Action   string `json:"action"`
+	Override bool   `json:"override,omitempty"`
+	ShareID  string `json:"shareId,omitempty"`
 }
 
-func readData(rw *bufio.ReadWriter) {
-	for {
-		str, _ := rw.ReadString('\n')
+//	{
+//		"action": "announce"
+//	}
+type trackerAnnounceRequest struct {
+	Action string `json:"action"`
+}
 
-		if str == "" {
-			return
+//	{
+//		"action": "push"
+//		"shareId": "6e656b6f",
+//	}
+type trackerPushRequest struct {
+	Action  string `json:"action"`
+	ShareID string `json:"shareId"`
+}
+
+//	{
+//		"action": "announceReceived",
+//      "data": {
+//      }
+//	}
+type trackerResponse struct {
+	Action string            `json:"action"`
+	Data   map[string]string `json:"data"`
+}
+
+func keepalive(conn *net.UDPConn, saddr *net.UDPAddr, seconds time.Duration) {
+	for {
+		pulseRequest := trackerPulseRequest{
+			"pulse",
+			false,
+			"",
 		}
-		if str != "\n" {
-			// Green console colour: 	\x1b[32m
-			// Reset console colour: 	\x1b[0m
-			fmt.Printf("\x1b[32m%s\x1b[0m> ", str)
+		jsonRequest, err := json.Marshal(pulseRequest)
+		_, err = conn.WriteToUDP(jsonRequest, saddr)
+		if err != nil {
+			log.Fatal(err)
 		}
+		time.Sleep(seconds * time.Second)
 	}
 }
 
-func writeData(rw *bufio.ReadWriter) {
-	stdReader := bufio.NewReader(os.Stdin)
-
+func listenServerResponse(conn *net.UDPConn) {
+	buf := make([]byte, 2048)
 	for {
-		fmt.Print("> ")
-		sendData, err := stdReader.ReadString('\n')
-
+		var anyResponse trackerResponse
+		fmt.Println("go read")
+		n, _, err := conn.ReadFromUDP(buf)
+		fmt.Println("did read")
 		if err != nil {
-			panic(err)
+			log.Print("Get peer address from server failed.")
+			log.Fatal(err)
 		}
-
-		rw.WriteString(fmt.Sprintf("%s\n", sendData))
-		rw.Flush()
+		err = json.Unmarshal(buf[:n], &anyResponse)
+		if err != nil {
+			log.Print("Unmarshal server response failed.")
+			log.Fatal(err)
+		}
+		fmt.Println(anyResponse)
 	}
 }
 
 // This function setup the log style and log level
 func setupLog(debug *bool) {
 	// setup log
-	logrus.SetOutput(os.Stdout)
-	Formatter := &logrus.TextFormatter{
+	log.SetOutput(os.Stdout)
+	Formatter := &log.TextFormatter{
 		EnvironmentOverrideColors: true,
 		FullTimestamp:             true,
-		TimestampFormat:           "2020-02-27 00:43:00",
+		TimestampFormat:           "2020-02-28 00:43:00",
 	}
-	logrus.SetFormatter(Formatter)
-	logrus.SetLevel(logrus.InfoLevel)
+	log.SetFormatter(Formatter)
+	log.SetLevel(log.InfoLevel)
 	if *debug {
-		logrus.SetLevel(logrus.DebugLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 }
 
 func main() {
 	connect := flag.String("connect", "", "Connect to peer by share ID")
 	trackerURL := flag.String("tracker", "", "Full tracker URL string")
+	port := flag.String("port", "", "Local port")
 	debug := flag.Bool("debug", false, "Debug")
 	help := flag.Bool("help", false, "Display help")
 	flag.Parse()
@@ -86,61 +114,77 @@ func main() {
 	}
 
 	setupLog(debug)
-	peer, err := newSobaniPeer(trackerURL)
+	buf := make([]byte, 2048)
+
+	// Prepare to register user to server.
+	saddr, err := net.ResolveUDPAddr("udp4", *trackerURL)
 	if err != nil {
-		// todo: retry
-		panic(err)
+		log.Print("Resolve server address failed.")
+		log.Fatal(err)
 	}
-	res, err := peer.announceToTracker()
+
+	// Prepare for local listening.
+	addr, err := net.ResolveUDPAddr("udp4", *port)
 	if err != nil {
-		// todo: retry
-		panic(err)
+		log.Print("Resolve local address failed.")
+		log.Fatal(err)
 	}
+	conn, err := net.ListenUDP("udp", addr)
+	if err != nil {
+		log.Print("Listen UDP failed.")
+		log.Fatal(err)
+	}
+
+	// Send registration information to server.
+	announceRequest := trackerAnnounceRequest{
+		"announce",
+	}
+	jsonRequest, err := json.Marshal(announceRequest)
+	if err != nil {
+		log.Print("Marshal Register information failed.")
+		log.Fatal(err)
+	}
+	_, err = conn.WriteToUDP(jsonRequest, saddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Print("Waiting for server response...")
+
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		log.Print("Register to server failed.")
+		log.Fatal(err)
+	}
+	var announceResponse trackerResponse
+	err = json.Unmarshal(buf[:n], &announceResponse)
+	if err != nil {
+		log.Print("Unmarshal server response failed.")
+		log.Fatal(err)
+	}
+	var shareID = announceResponse.Data["shareId"]
+	fmt.Printf("./client -tracker %s -connect %s\n", *trackerURL, shareID)
+
+	go keepalive(conn, saddr, 30)
+	go listenServerResponse(conn)
 
 	if *connect == "" {
-		logrus.Infof("Run './sobani -connect %s -tracker %s' on another console.\n", res.ShareID, *trackerURL)
-		// Hang forever
 		<-make(chan struct{})
 	} else {
-		info, err := peer.getPeerInfo(connect)
+		// Send connect request to server
+		pushRequest := trackerPushRequest{
+			"push",
+			*connect,
+		}
+		jsonRequest, err = json.Marshal(pushRequest)
 		if err != nil {
-			logrus.Errorf("Cannot get peer `%s` from %s", *connect, peer.TrackerURL)
-		} else {
-			logrus.Debugln("Peer Info", info)
+			log.Print("Marshal connection information failed.")
+			log.Fatal(err)
+		}
 
-			// Turn the destination into a multiaddr.
-			maddr, err := multiaddr.NewMultiaddr(info.Multiaddr)
-			if err != nil {
-				logrus.Fatalln(err)
-			}
-
-			// Extract the peer ID from the multiaddr.
-			p2pinfo, err := p2ppeer.AddrInfoFromP2pAddr(maddr)
-			if err != nil {
-				logrus.Fatalln(err)
-			}
-
-			// Add the destination's peer multiaddress in the peerstore.
-			// This will be used during connection and stream creation by libp2p.
-
-			(*peer.Host).Peerstore().AddAddrs(p2pinfo.ID, p2pinfo.Addrs, peerstore.PermanentAddrTTL)
-
-			// Start a stream with the destination.
-			// Multiaddress of the destination peer is fetched from the peerstore using 'peerId'.
-			s, err := (*peer.Host).NewStream(context.Background(), p2pinfo.ID, "/sobani/1.0.0")
-			if err != nil {
-				panic(err)
-			}
-
-			// Create a buffered stream so that read and writes are non blocking.
-			rw := bufio.NewReadWriter(bufio.NewReader(s), bufio.NewWriter(s))
-
-			// Create a thread to read and write data.
-			go writeData(rw)
-			go readData(rw)
-
-			// Hang forever.
-			select {}
+		for {
+			conn.WriteToUDP(jsonRequest, saddr)
+			time.Sleep(10 * time.Second)
 		}
 	}
 }
