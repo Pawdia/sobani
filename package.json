@@ -1,0 +1,22 @@
+{
+  "name": "sobani",
+  "version": "0.0.1",
+  "main": "app.js",
+  "repository": "https://github.com/nekomeowww/sobani",
+  "author": "Ayaka Neko",
+  "contributor": [
+    "BlueCocoa <cocoa@await.moe> (await.moe)"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^8.2.0"
+  },
+  "dependencies": {
+    "@discordjs/opus": "^0.1.0",
+    "naudiodon": "^2.1.2",
+    "prism-media": "^1.2.1"
+  }
+}
