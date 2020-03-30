@@ -31,10 +31,16 @@ const clientIdentity = hash.sha256(nowTime).substring(0, 8)
 
 let announced = false
 let pushed = false
+let pushedInterval = undefined
 let knocked = false
+let knockedInterval = undefined
 let keepingAlive = false
 
-const aliveMessage = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"alive"}))
+let pulsing = {
+    retry: 0
+}
+
+const aliveMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alive" }))
 const announceMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "announce" }))
 
 const isMac = process.platform === 'darwin'
@@ -173,7 +179,7 @@ function createWindow() {
     window.loadFile("index.html")
 
     // Open DevTools
-    // window.webContents.openDevTools()
+    window.webContents.openDevTools()
 }
 
 let TrayMenu = [
@@ -193,7 +199,7 @@ let TrayMenu = [
     },
     {
         label: "Mono",
-        click: function() {
+        click: function () {
 
         }
     },
@@ -278,7 +284,7 @@ setInterval(() => {
 
 server.on('message', (msg, rinfo) => {
     if (msg.length >= 8 && msg.slice(0, 8).toString() === "audiobuf") {
-        opusDecoder.write(msg.slice(8))
+        if (knocked) opusDecoder.write(msg.slice(8))
     } else {
         try {
             resp = JSON.parse(msg)
@@ -297,15 +303,16 @@ server.on('message', (msg, rinfo) => {
             } else if (resp.action == "pushed") {
                 // Server -> A
                 pushed = true
+                pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
                 // "5.6.7.8:2333"
                 peeraddr_info = resp.data.peeraddr.split(":")
                 // B addr:port
                 raddr = peeraddr_info[0]
-                rport = peeraddr_info[1]   
-        
+                rport = peeraddr_info[1]
+
                 // A -> NAT A -> NAT B -!> B
                 // NAT A will wait for B resp
-                const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"knock"}))
+                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "knock" }))
                 server.send(message, rport, raddr, (err) => {
                     if (err) dialog.showErrorBox(err.message, err.stack)
                 })
@@ -313,8 +320,8 @@ server.on('message', (msg, rinfo) => {
                 // from peer
                 if (!knocked) {
                     // keep alive with peer
-                    setInterval(() => {
-                        const alivemessage = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"alived"}))
+                    knockedInterval = setInterval(() => {
+                        const alivemessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alived" }))
                         server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
                             if (err) dialog.showErrorBox(err.message, err.stack)
                         })
@@ -323,24 +330,24 @@ server.on('message', (msg, rinfo) => {
                 knocked = true
                 updateToWindow(`peer knocked: ${msg} from ${rinfo.address}:${rinfo.port}`)
                 updateIndicatorToWindow("connected")
-                const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"answer"}))
+                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "answer" }))
                 server.send(message, rinfo.port, rinfo.address, (err) => {
                     if (err) dialog.showErrorBox(err.message, err.stack)
                 })
-                
+
                 raddr = rinfo.address
                 rport = rinfo.port
             } else if (resp.action == "income") {
                 // Server -> B
                 // A addr:port
                 push_id_info = resp.data.peeraddr.split(":")
-                
+
                 // A <- NAT A <- NAT B <- B
                 // Cus' NAT A is waiting for B resp
                 // so NAT A will forward this resp to A
                 // at this point
                 // connection between A and B will become active on NAT A
-                const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"knock"}))
+                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "knock" }))
                 updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
                 setInterval(() => {
                     if (!knocked) {
@@ -356,9 +363,22 @@ server.on('message', (msg, rinfo) => {
             } else if (resp.action == "answer") {
                 knocked = true
                 updateToWindow(`peer answered: ${msg} from ${rinfo.address}:${rinfo.port}`)
-                
+
+                setInterval(() => {
+                    const alivemessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alived" }))
+                    server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
+                        if (err) dialog.showErrorBox(err.message, err.stack)
+                    })
+                }, 2000)
+
                 raddr = rinfo.address
                 rport = rinfo.port
+            } else if (resp.action === "alived") {
+
+                let date = new Date()
+                // last seen at xxxxx
+                window.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
+                // updateIndicatorToWindow("connected")
             }
         } catch (err) {
             console.log(err)
@@ -375,7 +395,13 @@ opusDecoder.on('data', buf => {
 opusEncoder.on('data', buf => {
     if (knocked) {
         server.send(Buffer.concat([audioPrefix, buf]), rport, raddr, err => {
-            if (err) dialog.showErrorBox(err.message, err.stack)
+            if (err) {
+                if (pulsing.retry === 4) {
+                    dialog.showErrorBox(err.message, err.stack)
+                    pulsing.retry = 0
+                }
+                pulsing.retry++
+            }
         })
     }
 })
@@ -383,11 +409,19 @@ opusEncoder.on('data', buf => {
 ipcMain.on("connect", (event, args) => {
     // Connection
     const message = Buffer.from(JSON.stringify({ "shareId": args.trim(), "action": "push" }))
-    setInterval(function () {
+    pushedInterval = setInterval(function () {
         if (!pushed) {
             server.send(message, tracker.port, tracker.host, (err) => {
                 if (err) dialog.showErrorBox(err.message, err.stack)
             })
         }
     }, 1000)
+})
+
+ipcMain.on("disconnect", (event, args) => {
+    updateIndicatorToWindow("disconnected")
+    knocked = false
+    knockedInterval === undefined ? 0 : clearInterval(knockedInterval)
+    pushed = false
+    pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
 })

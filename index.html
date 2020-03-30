@@ -11,7 +11,7 @@
       font-family: Arial, Helvetica, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     }
 
-    span {
+    p>span {
       font-family: monospace;
       font-weight: 600;
       font-size: 1.2rem;
@@ -32,8 +32,27 @@
 
     .connect-button:hover {
       border-color: #DE79AA;
-      background-color: #DE79AA;
+      background-color: rgb(245, 98, 169);
       color: white;
+    }
+
+    .disconnect-button {
+      color: #ffffff;
+      transition-duration: 0.4s;
+      border: 2px solid #FF2F5C;
+      border-radius: 10px;
+      background-color: #FF2F5C;
+      margin-top: 20px;
+      padding-right: 20px;
+      padding-left: 20px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .disconnect-button:hover {
+      border-color: #FF2F5C;
+      background-color: rgb(255, 255, 255);
+      color: #FF2F5C;
     }
 
     .form-group {
@@ -174,6 +193,15 @@
       padding-left: 8px;
       display: inline-block;
     }
+
+    .lastseen {
+      font-style: italic;
+      color: rgb(134, 105, 119);
+      position: absolute;
+      width: auto;
+      padding-top: 10%;
+      margin-left: 80%;
+    }
   </style>
 </head>
 
@@ -191,7 +219,7 @@
       <p style="font-weight: bold;">Welcome to use Sobani!</p>
       <p>Current Version: 0.1.0</p>
       <div id="shareid-field"></div>
-      <div class="form-group field">
+      <div class="form-group field" style="display: block;">
         <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
         <label for="name" class="form-label">Remote ID</label><br>
         <input type="button" class="connect-button" value="Connect" onclick="connect()">
@@ -201,31 +229,56 @@
   <div class="logger">
 
   </div>
+  <div class="lastseen" style="display: none">
+    Last Seen: <span id="lastseen-time"></span>
+  </div>
   <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
   <script>
+    // Announced
     window.api.response("announced", shareId => {
       $("#shareid-field").append(`<p>Your share ID is <span>${shareId}</span></p>`)
     })
+
+    // Controlling
     window.api.response("control", status => {
       $(".load")[0].remove()
       $(".container").append(`<p>${status}<p>`)
     })
-    window.api.response("indicator", update => {
-      switch (update) {
-        case "connected":
-          document.getElementById("connection-indicator").style.background = "#4CDA7B";
-          $("#connection-not")[0].remove()
-          $(".indicator").append(`<a class="connection-text" id="connection-true">Connected</a>`)
 
-          $(".form-group")[0].remove();          
+    // Indicator
+    window.api.response("indicator", update => {
+      var timer
+      switch (update) {
+
+        // If Connected
+        case "connected":
+          timer === undefined ? 0 : clearTimeout(timer)
+          document.getElementById("connection-indicator").style.background = "#4CDA7B";
+          $("#connection-not")[0].remove();
+          $(".indicator").append(`<a class="connection-text" id="connection-true">Connected</a>`);
+
+          document.getElementsByClassName("lastseen")[0].style.display = "block";
+          document.getElementsByClassName("form-group")[0].style.display = "none";
+          $(".container").append(`<input type="button" class="disconnect-button" value="Disconnect" onclick="disconnect()">`);
+
+          alert("Connected")
           break;
+
+        // If Disconnected
         case "disconnected":
           document.getElementById("connection-indicator").style.background = "#ff2f5c";
-          $("#connection-true")[0].remove()
-          $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`)
+          $("#connection-true")[0].remove();
+          $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`);
+          alert("Disconnected")
           break;
       }
     })
+
+    window.api.response("lastseen", function (lastseen) {
+      $("#lastseen-time")[0].text = lastseen;
+    })
+
+    // Connect Action
     function connect() {
       let text = $("#remote-id")[0].value;
       if (text === "" || text === undefined || text.trim() === "") {
@@ -236,6 +289,12 @@
         $(".container").append("<div class='load'></div>");
         window.api.request("connect", text.trim());
       }
+    }
+
+    function disconnect() {
+      $(".disconnect-button")[0].remove();
+      document.getElementsByClassName("form-group")[0].style.display = "block";
+      window.api.request("disconnect", false)
     }
   </script>
 </body>

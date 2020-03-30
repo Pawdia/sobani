@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld(
         },
         response: (channel, func) => {
             console.log("resp")
-            ipcRenderer.on(channel, (event, ...args) => {
-                func(...args);
+            ipcRenderer.on(channel, (event, args) => {
+                func(args);
             })
         }
     }
