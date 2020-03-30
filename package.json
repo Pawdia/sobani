@@ -1,5 +1,6 @@
 {
   "name": "sobani",
+  "productName": "Sobani",
   "version": "0.0.1",
   "main": "app.js",
   "repository": "https://github.com/nekomeowww/sobani",
@@ -21,7 +22,9 @@
   },
   "devDependencies": {
     "electron": "^8.2.0",
-    "electron-builder": "^22.4.1"
+    "electron-builder": "^22.4.1",
+    "electron-packager": "^14.2.1",
+    "electron-rebuild": "^1.10.1"
   },
   "dependencies": {
     "@discordjs/opus": "^0.1.0",
