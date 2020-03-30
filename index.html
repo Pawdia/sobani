@@ -7,10 +7,22 @@
   <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
   <style>
-    .connect-botton {
+    body {
+      font-family: Arial, Helvetica, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+
+    span {
+      font-family: monospace;
+      font-weight: 600;
+      font-size: 1.2rem;
+    }
+
+    .connect-button {
+      color: rgb(255, 183, 0);
       transition-duration: 0.4s;
       border-radius: 10px;
       border: 2px solid #FAE1A4;
+      background-color: #ffffff;
       margin-top: 20px;
       padding-right: 20px;
       padding-left: 20px;
@@ -18,7 +30,7 @@
       outline: none;
     }
 
-    .connect-botton:hover {
+    .connect-button:hover {
       border-color: #DE79AA;
       background-color: #DE79AA;
       color: white;
@@ -131,33 +143,88 @@
       animation-iteration-count: infinite;
       animation-timing-function: linear;
     }
+
+    .indicator {
+      white-space: nowrap;
+      position: absolute;
+      margin-top: 20px;
+      margin-left: 20px;
+      float: left;
+    }
+
+    #connection-indicator {
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      background: #FF2F5C;
+      display: inline-block;
+    }
+
+    #connection-not {
+      color: rgb(255, 47, 92);
+    }
+
+    #connection-true {
+      color: #4CDA7B;
+    }
+
+    .connection-text {
+      position: absolute;
+      padding-top: 2px;
+      padding-left: 8px;
+      display: inline-block;
+    }
   </style>
 </head>
 
-<body style="line-height: 1em; padding-top: 40px;">
-  <div class="container">
-    <center>
+<body>
+  <div class="nonecentered">
+    <div class="indicator">
+      <div id="connection-indicator"></div>
+      <a class="connection-text" id="connection-not">Not Connected</a>
+    </div>
+  </div>
+  <center>
+    <div class="container" style="line-height: 1em; padding-top: 40px;">
       <img src="./src/assets/icon.png" style="width: 250px; height: 250px;" />
       <br>
       <p style="font-weight: bold;">Welcome to use Sobani!</p>
-      <p>Current Version: 0.0.1</p>
+      <p>Current Version: 0.1.0</p>
       <div id="shareid-field"></div>
       <div class="form-group field">
         <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
         <label for="name" class="form-label">Remote ID</label><br>
-        <input type="button" class="connect-botton" value="Connect" onclick="connect()">
+        <input type="button" class="connect-button" value="Connect" onclick="connect()">
       </div>
-    </center>
-  </div>
+    </div>
+  </center>
+  <div class="logger">
 
+  </div>
   <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
   <script>
     window.api.response("announced", shareId => {
-      $("#shareid-field").append(`<p>${shareId}</p>`)
+      $("#shareid-field").append(`<p>Your share ID is <span>${shareId}</span></p>`)
     })
     window.api.response("control", status => {
       $(".load")[0].remove()
       $(".container").append(`<p>${status}<p>`)
+    })
+    window.api.response("indicator", update => {
+      switch (update) {
+        case "connected":
+          document.getElementById("connection-indicator").style.background = "#4CDA7B";
+          $("#connection-not")[0].remove()
+          $(".indicator").append(`<a class="connection-text" id="connection-true">Connected</a>`)
+
+          $(".form-group")[0].remove();          
+          break;
+        case "disconnected":
+          document.getElementById("connection-indicator").style.background = "#ff2f5c";
+          $("#connection-true")[0].remove()
+          $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`)
+          break;
+      }
     })
     function connect() {
       let text = $("#remote-id")[0].value;

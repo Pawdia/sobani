@@ -1,12 +1,16 @@
 {
   "name": "sobani",
   "productName": "Sobani",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "main": "app.js",
   "repository": "https://github.com/nekomeowww/sobani",
   "author": "Ayaka Neko",
   "contributor": [
-    "BlueCocoa <cocoa@await.moe> (await.moe)"
+    {
+      "name": "Cocoa Kaori",
+      "email": "cocoa@await.moe",
+      "url": "https://await.moe"
+    }
   ],
   "license": "MIT",
   "scripts": {
