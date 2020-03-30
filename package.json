@@ -1,7 +1,7 @@
 {
   "name": "sobani",
   "productName": "Sobani",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "app.js",
   "repository": "https://github.com/nekomeowww/sobani",
   "author": "Ayaka Neko",
@@ -22,7 +22,8 @@
     "appId": "moe.ayaka.sobani",
     "mac": {
       "category": "public.app-category.social-networking"
-    }
+    },
+    "icon": "./build/icon.png"
   },
   "devDependencies": {
     "electron": "^8.2.0",
