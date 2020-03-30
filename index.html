@@ -1,17 +1,176 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8">
-    <title>Sobani</title>
-    <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
-  </head>
-  <body style="line-height: 1em; padding-top: 40px;">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Sobani</title>
+  <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+  <style>
+    .connect-botton {
+      transition-duration: 0.4s;
+      border-radius: 10px;
+      border: 2px solid #FAE1A4;
+      margin-top: 20px;
+      padding-right: 20px;
+      padding-left: 20px;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    .connect-botton:hover {
+      border-color: #DE79AA;
+      background-color: #DE79AA;
+      color: white;
+    }
+
+    .form-group {
+      position: relative;
+      padding: 15px 0 0 0;
+      width: 30%;
+    }
+
+    .remote-input {
+      border-radius: 6px;
+      outline: none;
+    }
+
+    .form-field {
+      width: 100%;
+      border: 0;
+      border-bottom: 2px solid #ffdb8f;
+      outline: 0;
+      font-size: 1rem;
+      color: rgb(255, 124, 163);
+      padding: 7px 0;
+      background: transparent;
+      transition: border-color 0.2s;
+    }
+
+    .form-field::placeholder {
+      color: transparent;
+    }
+
+    .form-field:placeholder-shown~.form-label {
+      font-size: 1rem;
+      cursor: text;
+      top: 20px;
+    }
+
+    .form-label {
+      position: absolute;
+      top: 0;
+      display: block;
+      transition: 0.2s;
+      font-size: 1rem;
+      color: #ffd723;
+    }
+
+    .form-field:focus {
+      padding-bottom: 6px;
+      font-weight: 300;
+      border-width: 3px;
+      border-image: linear-gradient(to right, #ffe0b7, #ff8daf);
+      border-image-slice: 1;
+    }
+
+    .form-field:focus~.form-label {
+      position: absolute;
+      top: 0;
+      display: block;
+      transition: 0.2s;
+      font-size: 1rem;
+      color: #ffc75e;
+      font-weight: 700;
+    }
+
+    /* reset input */
+    .form-field:required,
+    .form-field:invalid {
+      box-shadow: none;
+    }
+
+    @keyframes rotate {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+
+    @-webkit-keyframes rotate {
+      from {
+        -webkit-transform: rotate(0deg);
+      }
+
+      to {
+        -webkit-transform: rotate(360deg);
+      }
+    }
+
+    .load {
+      width: 72px;
+      height: 72px;
+      margin: 50px auto 0 auto;
+      border: solid 6px #ff78a0;
+      border-radius: 50%;
+      border-right-color: transparent;
+      border-bottom-color: transparent;
+      -webkit-transition: all 0.5s ease-in;
+      -webkit-animation-name: rotate;
+      -webkit-animation-duration: 1.0s;
+      -webkit-animation-iteration-count: infinite;
+      -webkit-animation-timing-function: linear;
+
+      transition: all 0.5s ease-in;
+      animation-name: rotate;
+      animation-duration: 1.0s;
+      animation-iteration-count: infinite;
+      animation-timing-function: linear;
+    }
+  </style>
+</head>
+
+<body style="line-height: 1em; padding-top: 40px;">
+  <div class="container">
     <center>
-        <img src="./src/assets/icon.png" style="width: 300px; height: 300px;" />
-        <br>
-        <p style="font-weight: bold;">Welcome to use Sobani!</p>
-        <p>Current Version: 0.0.1</p>
+      <img src="./src/assets/icon.png" style="width: 250px; height: 250px;" />
+      <br>
+      <p style="font-weight: bold;">Welcome to use Sobani!</p>
+      <p>Current Version: 0.0.1</p>
+      <div id="shareid-field"></div>
+      <div class="form-group field">
+        <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
+        <label for="name" class="form-label">Remote ID</label><br>
+        <input type="button" class="connect-botton" value="Connect" onclick="connect()">
+      </div>
     </center>
-  </body>
+  </div>
+
+  <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
+  <script>
+    window.api.response("announced", shareId => {
+      $("#shareid-field").append(`<p>${shareId}</p>`)
+    })
+    window.api.response("control", status => {
+      $(".load")[0].remove()
+      $(".container").append(`<p>${status}<p>`)
+    })
+    function connect() {
+      let text = $("#remote-id")[0].value;
+      if (text === "" || text === undefined || text.trim() === "") {
+        alert("Field is required\nMust enter a valid ShareID");
+      }
+      else {
+        $(".form-group")[0].remove();
+        $(".container").append("<div class='load'></div>");
+        window.api.request("connect", text.trim());
+      }
+    }
+  </script>
+</body>
+
 </html>

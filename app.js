@@ -1,7 +1,15 @@
+// Internal
+const dgram = require("dgram")
+const server = dgram.createSocket('udp4')
+const process = require('process')
+
 // Dependencies
 const path = require("path")
-const { app, Menu, Tray, BrowserWindow, dialog } = require("electron")
+const { app, Menu, Tray, BrowserWindow, ipcMain, dialog } = require("electron")
 const nativeImage = require("electron").nativeImage
+
+// Local
+const hash = require("./src/utils/hash")
 
 // Audio Support Dependencies
 const prism = require("prism-media")
@@ -9,6 +17,14 @@ const portAudio = require("naudiodon")
 
 // Global
 app.name = "Sobani"
+
+let tracker = {
+    host: "108.61.197.8",
+    port: 3000
+}
+
+let raddr = ""
+let rport = ""
 
 const isMac = process.platform === 'darwin'
 const isWin = process.platform === 'win32'
@@ -123,8 +139,12 @@ function createWindow() {
         title: "Sobani",
         backgroundColor: "#FFFFFF",
         icon: icon,
+        resizable: false,
         webPreferences: {
-            nodeIntegration: true
+            nodeIntegration: true,
+            contextIsolation: true, // protect against prototype pollution
+            enableRemoteModule: false, // turn off remote
+            preload: path.join(__dirname, "preload.js") // use a preload script
         }
     })
 
@@ -175,6 +195,23 @@ function toggleWindow() {
     window.isVisible() ? window.hide() : window.show()
 }
 
+function updateToWindow(info) {
+    window.webContents.send("control", info)
+}
+
+function updateAnnouncedToWindow(shareId) {
+    window.webContents.send("announced", shareId)
+}
+
+// Server Listening
+server.on('listening', () => {
+    const address = server.address()
+    console.log(`server listening ${address.address}:${address.port}`)
+})
+
+// Server bind
+server.bind()
+
 app.on("ready", () => {
     createTray()
     createWindow()
@@ -200,4 +237,136 @@ app.on("active", () => {
 app.on("browser-window-blur", () => {
     TrayMenu[0].label = "Show"
     tray.setContextMenu(Menu.buildFromTemplate(TrayMenu))
+})
+
+// Main
+const nowTime = new Date().toString()
+const clientIdentity = hash.sha256(nowTime).substring(0, 8)
+
+let announced = false
+let pushed = false
+let knocked = false
+let keepingAlive = false
+
+const aliveMessage = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"alive"}))
+const announceMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "announce" }))
+setInterval(() => {
+    if (!announced) {
+        server.send(announceMessage, tracker.port, tracker.host, (err) => {
+            if (err) console.log(err)
+        })
+    }
+}, 1000)
+
+server.on('message', (msg, rinfo) => {
+    try {
+        resp = JSON.parse(msg)
+        if (resp.action == "announced") {
+            announced = true
+            updateAnnouncedToWindow(`Your share ID is ${resp.data.shareId}`)
+            // keep alive with tracker
+            if (!keepingAlive) {
+                keepingAlive = true
+                setInterval(() => {
+                    server.send(aliveMessage, tracker.port, tracker.host, (err) => {
+                        if (err) dialog.showErrorBox(err.message, err.stack)
+                    })
+                }, 2000)
+            }
+        } else if (resp.action == "pushed") {
+            // Server -> A
+            pushed = true
+            // "5.6.7.8:2333"
+            peeraddr_info = resp.data.peeraddr.split(":")
+            // B addr:port
+            raddr = peeraddr_info[0]
+            rport = peeraddr_info[1]   
+    
+            // A -> NAT A -> NAT B -!> B
+            // NAT A will wait for B resp
+            const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"knock"}))
+            server.send(message, rport, raddr, (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+        } else if (resp.action == "knock") {
+            // from peer
+            if (!knocked) {
+                // keep alive with peer
+                setInterval(() => {
+                    const alivemessage = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"alived"}))
+                    server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
+                        if (err) dialog.showErrorBox(err.message, err.stack)
+                    })
+                }, 2000)
+            }
+            knocked = true
+            updateToWindow(`peer knocked: ${msg} from ${rinfo.address}:${rinfo.port}`)
+            
+            
+            const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"answer"}))
+            server.send(message, rinfo.port, rinfo.address, (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+            
+            raddr = rinfo.address
+            rport = rinfo.port
+        } else if (resp.action == "income") {
+            // Server -> B
+            // A addr:port
+            push_id_info = resp.data.peeraddr.split(":")
+            
+            // A <- NAT A <- NAT B <- B
+            // Cus' NAT A is waiting for B resp
+            // so NAT A will forward this resp to A
+            // at this point
+            // connection between A and B will become active on NAT A
+            const message = Buffer.from(JSON.stringify({"id":clientIdentity, "action":"knock"}))
+            updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
+            setInterval(() => {
+                if (!knocked) {
+                    server.send(message, push_id_info[1], push_id_info[0], (err) => {
+                        if (err) dialog.showErrorBox(err.message, err.stack)
+                    })
+                }
+            }, 1000)
+        } else if (resp.action == "msg") {
+            console.log(`\n-> [${resp.id}]: ${resp.msg}`)
+        } else if (resp.action == "answer") {
+            knocked = true
+            updateToWindow(`peer answered: ${msg} from ${rinfo.address}:${rinfo.port}`)
+            
+            raddr = rinfo.address
+            rport = rinfo.port
+        }
+    } catch (err) {
+        opusDecoder.write(msg)
+    }
+})
+
+// Opus Decoder
+opusDecoder.on('data', buf => {
+    if (audioOut !== undefined) audioOut.write(buf)
+})
+
+// Opus Encoder
+opusEncoder.on('data', buf => {
+    if (knocked) {
+        server.send(buf, rport, raddr, err => {
+            if (err) dialog.showErrorBox(err.message, err.stack)
+        })
+    }
+})
+
+ipcMain.on("connect", (event, args) => {
+    console.log(event, args)
+
+    // Connection
+    const message = Buffer.from(JSON.stringify({ "shareId": args.trim(), "action": "push" }))
+    setInterval(function () {
+        if (!pushed) {
+            server.send(message, tracker.port, tracker.host, (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+        }
+    }, 1000)
 })
