@@ -270,6 +270,8 @@ function quitApp() {
 
 // When ready
 app.on("ready", () => {
+    let configErrored = false
+
     createTray()
     createWindow()
 
@@ -289,7 +291,10 @@ app.on("ready", () => {
             "Sobani and retry again. \n" +
             "If this problem still happens, send us issue at https://github.com/nekomeowww/sobani"
         config.tracker !== undefined ? tracker = config.tracker : dialog.showErrorBox("Fatal Error: Configuration file corrupted", configFatalError)
-        shell.openItem(appDataPath)
+        if (!configErrored) {
+            shell.openItem(appDataPath)
+            configErrored = true
+        }
         quitApp()
     }
     else {
@@ -304,7 +309,10 @@ app.on("ready", () => {
         let trackerIsNullFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
             "directory to see if you have tracker host and tracker port filled in. If not, find the proper one with sobani-tracker instance"
         dialog.showErrorBox("Tracker configuration is not set", trackerIsNullFatalError)
-        shell.openItem(appDataPath)
+        if (!configErrored) {
+            shell.openItem(appDataPath)
+            configErrored = true
+        }
         quitApp()
     }
 
@@ -312,7 +320,10 @@ app.on("ready", () => {
         let trackerPortIsNaNFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
             "directory to see if you have a valid tracker port filled in. If not, find the proper one with sobani-tracker instance"
         dialog.showErrorBox("Tracker configuration for port is invalid", trackerPortIsNaNFatalError)
-        shell.openItem(appDataPath)
+        if (!configErrored) {
+            shell.openItem(appDataPath)
+            configErrored = true
+        }
         quitApp()
     }
 
@@ -321,7 +332,10 @@ app.on("ready", () => {
             "directory to see if you have a valid tracker host address filled in. Notice that the address starts with 'https://' " +
             "or 'http://' is not required. If not, find the proper one with sobani-tracker instance"
         dialog.showErrorBox("Tracker configuration for host is invalid", trackerHostIsInvalidFatalError)
-        shell.openItem(appDataPath)
+        if (!configErrored) {
+            shell.openItem(appDataPath)
+            configErrored = true
+        }
         quitApp()
     }
 
