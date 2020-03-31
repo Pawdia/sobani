@@ -95,17 +95,15 @@ function audioContextMenuBuilder(deviceName, deviceId, type) {
     let contextMenuObject = {
         label: `${deviceId}: ${deviceName}`,
         click: function () {
-            if (audioOutDevice.started && deviceInstance !== null) {
-                console.log("Switching device...")
-                deviceInstance.quit()
-            }
-
             console.log("Setting up device...")
             switch (type) {
                 case "in":
+                    if (audioInDevice.started && audioInDevice.deviceInstance !== null) {
+                        console.log("Switching device...")
+                        audioInDevice.deviceInstance.quit()
+                    }
                     let inOption = audioDeviceOption
                     inOption.deviceId = deviceId
-                    console.log(inOption)
                     audioInDevice.deviceInstance = new portAudio.AudioIO({
                         inOptions: inOption
                     })
@@ -119,6 +117,10 @@ function audioContextMenuBuilder(deviceName, deviceId, type) {
                     })
                     break
                 case "out":
+                    if (audioOutDevice.started && audioOutDevice.deviceInstance !== null) {
+                        console.log("Switching device...")
+                        audioOutDevice.deviceInstance.quit()
+                    }
                     let outOption = audioDeviceOption
                     outOption.deviceId = deviceId
                     audioOutDevice.deviceInstance = new portAudio.AudioIO({
@@ -463,12 +465,14 @@ ipcMain.on("disconnect", (event, args) => {
     const disconnectMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "disconnect" }))
     let retryInterval = setInterval(function () {
         retryTimes++
-        server.send(disconnectMessage, rinfo.port, rinfo.address, (err) => {
+        server.send(disconnectMessage, rport, raddr, (err) => {
             if (err) dialog.showErrorBox(err.message, err.stack)
         })
         if (retryTimes >= 4) {
             retryTimes = 0
             clearInterval(retryInterval)
+            raddr = undefined
+            rport = undefined
         }
     }, 1000)
     updateIndicatorToWindow({ status: "disconnected" })
