@@ -30,6 +30,7 @@ let rport = ""
 const nowTime = new Date().toString()
 const clientIdentity = hash.sha256(nowTime).substring(0, 8)
 
+let disconnected = false
 let announced = false
 let pushed = false
 let pushedInterval = undefined
@@ -183,7 +184,7 @@ function createWindow() {
     window.loadFile("index.html")
 
     // Open DevTools
-    // window.webContents.openDevTools()
+    window.webContents.openDevTools()
 }
 
 let TrayMenu = [
@@ -245,6 +246,8 @@ async function updateAnnouncedToWindow(shareId) {
 }
 
 async function updateIndicatorToWindow(update) {
+    update.status === "connected" ? disconnected = false : 0
+    update.status === "disconnected" ? disconnected = true : 0
     window.webContents.send("indicator", update)
 }
 
@@ -359,6 +362,7 @@ server.on('message', (msg, rinfo) => {
                 }
                 knocked = true
                 updateToWindow(`peer knocked: ${msg} from ${rinfo.address}:${rinfo.port}`)
+                disconnected = false
                 updateIndicatorToWindow({ status: "connected", id: resp.id })
                 const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "answer" }))
                 server.send(message, rinfo.port, rinfo.address, (err) => {
@@ -385,6 +389,7 @@ server.on('message', (msg, rinfo) => {
                             if (err) dialog.showErrorBox(err.message, err.stack)
                         })
                     } else {
+                        disconnected = false
                         updateIndicatorToWindow({ status: "connected", id: resp.id })
                     }
                 }, 1000)
@@ -393,7 +398,8 @@ server.on('message', (msg, rinfo) => {
             } else if (resp.action == "answer") {
                 knocked = true
                 updateToWindow(`peer answered: ${msg} from ${rinfo.address}:${rinfo.port}`)
-
+                disconnected = false
+                updateIndicatorToWindow({ status: "connected", id: resp.id })
                 setInterval(() => {
                     const alivemessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alived" }))
                     server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
@@ -412,10 +418,12 @@ server.on('message', (msg, rinfo) => {
                 // If A(B) received "disconnect" action,
                 // clear all intervals and disconnect the current session
             } else if (resp.action == "disconnect" && raddr === rinfo.address && rport === rinfo.port) {
-                console.log(`disconnect action received from ${raddr}:${rport}...`)
-                updateIndicatorToWindow({ status: "disconnect" })
-                knocked = false
-                clearSession()
+                if (!disconnected) {
+                    updateIndicatorToWindow({ status: "disconnected" })
+                    knocked = false
+                    disconnected = true
+                    clearSession()
+                }
             }
         } catch (err) {
             console.log(err)
@@ -467,20 +475,13 @@ ipcMain.on("disconnect", (event, args) => {
     clearSession()
     console.log(raddr)
     console.log(rport)
-    let retryTimes = 0
+    // let retryTimes = 0
     const disconnectMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "disconnect" }))
-    let retryInterval = setInterval(function () {
-        retryTimes++
-        console.log("disconnect packet sent from line 470...")
-        server.send(disconnectMessage, rport, raddr, (err) => {
-            if (err) dialog.showErrorBox(err.message, err.stack)
-        })
-        if (retryTimes >= 4) {
-            retryTimes = 0
-            clearInterval(retryInterval)
-            raddr = undefined
-            rport = undefined
-        }
-    }, 1000)
+    console.log("disconnect packet sent")
+    server.send(disconnectMessage, rport, raddr, (err) => {
+        if (err) dialog.showErrorBox(err.message, err.stack)
+        raddr = undefined
+        rport = undefined
+    })
     updateIndicatorToWindow({ status: "disconnected" })
 })

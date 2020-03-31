@@ -23,31 +23,23 @@
       <p style="font-weight: bold;">Welcome to use Sobani!</p>
       <p>Current Version: 0.1.1</p>
       <div id="shareid-field"></div>
+      <div id="loading"></div>
+      <input type="button" class="disconnect-button" value="Disconnect" onclick="disconnect()" style="display: none;">
       <div class="form-group field" style="display: block;">
         <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
-        <input type="button" class="connect-button" id="connect-button" value="Connect" onclick="connect()"><br>
-        <label for="name" class="form-label">Remote ID</label>
+        <input type="button" class="connect-button" id="connect-button" value="Connect" onclick="connect()"
+          style="display: block;">
+        <br>
+        <label for="name" class="form-label">Share ID</label>
       </div>
     </div>
   </center>
-  <div class="logger">
-
-  </div>
+  <div class="logger"></div>
   <div class="lastseen" style="display: none">
     Last Seen: <span id="lastseen-time"></span>
   </div>
   <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
   <script>
-    // var labelID;
-
-    // $('.form-label').click(function () {
-    //   labelID = $(this).attr('for');
-    //   $('#' + labelID).trigger('focus');
-    // });
-    // $(".form-label").click(function () {
-    //   $(".form-field")[0].click();
-    // });
-
     let input = document.getElementById("remote-id");
     input.addEventListener("keyup", function (event) {
       if (event.keyCode === 13) {
@@ -64,7 +56,7 @@
     // Controlling
     window.api.response("control", status => {
       $(".load")[0].remove()
-      $(".container").append(`<p>${status}<p>`)
+      $(".container").append(`<p class="log">${status}<p>`)
     })
 
     // Indicator
@@ -75,23 +67,37 @@
         // If Connected
         case "connected":
           timer === undefined ? 0 : clearTimeout(timer)
+
+          // Toggle Indicator
           document.getElementById("connection-indicator").style.background = "#4CDA7B";
           $("#connection-not")[0].remove();
           $(".indicator").append(`<a class="connection-text" id="connection-true">Connected</a>`);
           $("#shareid-field").append(`<p id="connected-user">Your are connected with <span>${update.id}</span></p>`);
 
           // document.getElementsByClassName("lastseen")[0].style.display = "block";
-          document.getElementsByClassName("form-group")[0].style.display = "none";
-          $(".container").append(`<input type="button" class="disconnect-button" value="Disconnect" onclick="disconnect()">`);
+          // Remove Connect
+          document.getElementsByClassName("form-label")[0].style.display = "none";
+          document.getElementsByClassName("form-field")[0].style.display = "none";
+          document.getElementsByClassName("connect-button")[0].style.display = "none"
+          document.getElementsByClassName("disconnect-button")[0].style.display = "block";
           break;
 
         // If Disconnected
         case "disconnected":
-          document.getElementsByClassName("form-group")[0].style.display = "block";
+          // Toggle Indicator
           document.getElementById("connection-indicator").style.background = "#ff2f5c";
           $("#connection-true")[0].remove();
           $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`);
           $("#connected-user")[0].remove();
+
+          // Remove Disconnect
+          document.getElementsByClassName("form-label")[0].style.display = "block";
+          document.getElementsByClassName("form-field")[0].style.display = "block";
+          document.getElementsByClassName("connect-button")[0].style.display = "block"
+          document.getElementsByClassName("disconnect-button")[0].style.display = "none";
+
+          // Remove all logs
+          $(".log").remove();
           break;
       }
     })
@@ -107,14 +113,15 @@
         alert("Field is required\nMust enter a valid ShareID");
       }
       else {
-        document.getElementsByClassName("form-group")[0].style.display = "none";
-        $(".container").append("<div class='load'></div>");
+        document.getElementsByClassName("form-label")[0].style.display = "none";
+        document.getElementsByClassName("form-field")[0].style.display = "none";
+        document.getElementsByClassName("connect-button")[0].style.display = "none"
+        $("#loading").append("<div class='load'></div>");
         window.api.request("connect", text.trim());
       }
     }
 
     function disconnect() {
-      $(".disconnect-button")[0].remove();
       document.getElementsByClassName("form-group")[0].style.display = "block";
       window.api.request("disconnect", false)
     }
