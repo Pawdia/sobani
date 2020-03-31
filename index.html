@@ -6,207 +6,7 @@
   <title>Sobani</title>
   <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
   <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
-  <style>
-    body {
-      font-family: Arial, Helvetica, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-    }
-
-    p>span {
-      font-family: Monaco, Consolas, monospace, "Microsoft YaHei";
-      font-weight: 600;
-      font-size: 1rem;
-    }
-
-    .connect-button {
-      color: rgb(255, 183, 0);
-      transition-duration: 0.4s;
-      border-radius: 13px;
-      border: 2px solid #FAE1A4;
-      background-color: #ffffff;
-      margin-top: 20px;
-      padding-top: 3px;
-      padding-bottom: 3px;
-      padding-right: 20px;
-      padding-left: 20px;
-      font-size: 1rem;
-      outline: none;
-    }
-
-    .connect-button:hover {
-      border-color: #DE79AA;
-      background-color: rgb(245, 98, 169);
-      color: white;
-    }
-
-    .disconnect-button {
-      color: #ffffff;
-      transition-duration: 0.4s;
-      border: 2px solid #FF2F5C;
-      border-radius: 13px;
-      background-color: #FF2F5C;
-      margin-top: 20px;
-      padding-top: 3px;
-      padding-bottom: 3px;
-      padding-right: 20px;
-      padding-left: 20px;
-      font-size: 1rem;
-      outline: none;
-    }
-
-    .disconnect-button:hover {
-      border-color: #FF2F5C;
-      background-color: rgb(255, 255, 255);
-      color: #FF2F5C;
-    }
-
-    .form-group {
-      position: relative;
-      padding: 15px 0 0 0;
-      width: 30%;
-    }
-
-    .remote-input {
-      border-radius: 6px;
-      outline: none;
-    }
-
-    .form-field {
-      width: 100%;
-      border: 0;
-      border-bottom: 2px solid #ffdb8f;
-      outline: 0;
-      font-size: 1rem;
-      color: rgb(255, 124, 163);
-      padding: 7px 0;
-      background: transparent;
-      transition: border-color 0.2s;
-    }
-
-    .form-field::placeholder {
-      color: transparent;
-    }
-
-    .form-field:placeholder-shown~.form-label {
-      font-size: 1rem;
-      cursor: text;
-      top: 20px;
-    }
-
-    .form-label {
-      position: absolute;
-      top: 0;
-      display: block;
-      transition: 0.2s;
-      font-size: 1rem;
-      color: #ffd723;
-    }
-
-    .form-field:focus {
-      padding-bottom: 6px;
-      font-weight: 300;
-      border-width: 3px;
-      border-image: linear-gradient(to right, #ffe0b7, #ff8daf);
-      border-image-slice: 1;
-    }
-
-    .form-field:focus~.form-label {
-      position: absolute;
-      top: 0;
-      display: block;
-      transition: 0.2s;
-      font-size: 1rem;
-      color: #ffc75e;
-      font-weight: 700;
-    }
-
-    /* reset input */
-    .form-field:required,
-    .form-field:invalid {
-      box-shadow: none;
-    }
-
-    @keyframes rotate {
-      from {
-        transform: rotate(0deg);
-      }
-
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-
-    @-webkit-keyframes rotate {
-      from {
-        -webkit-transform: rotate(0deg);
-      }
-
-      to {
-        -webkit-transform: rotate(360deg);
-      }
-    }
-
-    .load {
-      width: 50px;
-      height: 50px;
-      margin: 40px auto 0 auto;
-      border: solid 3px #ff78a0;
-      border-radius: 50%;
-      border-right-color: transparent;
-      border-bottom-color: transparent;
-      -webkit-transition: all 0.5s ease-in;
-      -webkit-animation-name: rotate;
-      -webkit-animation-duration: 1.0s;
-      -webkit-animation-iteration-count: infinite;
-      -webkit-animation-timing-function: linear;
-
-      transition: all 0.5s ease-in;
-      animation-name: rotate;
-      animation-duration: 1.0s;
-      animation-iteration-count: infinite;
-      animation-timing-function: linear;
-    }
-
-    .indicator {
-      white-space: nowrap;
-      position: absolute;
-      margin-top: 20px;
-      margin-left: 20px;
-      float: left;
-    }
-
-    #connection-indicator {
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      background: #FF2F5C;
-      display: inline-block;
-    }
-
-    #connection-not {
-      color: rgb(255, 47, 92);
-    }
-
-    #connection-true {
-      color: #4CDA7B;
-    }
-
-    .connection-text {
-      position: absolute;
-      padding-top: 2px;
-      padding-left: 8px;
-      display: inline-block;
-    }
-
-    .lastseen {
-      font-style: italic;
-      color: rgb(134, 105, 119);
-      position: absolute;
-      width: auto;
-      padding-top: 10%;
-      margin-left: 80%;
-    }
-  </style>
+  <link href="./src/assets/css/main.css" rel="stylesheet">
 </head>
 
 <body>
@@ -225,8 +25,8 @@
       <div id="shareid-field"></div>
       <div class="form-group field" style="display: block;">
         <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
-        <label for="name" class="form-label">Remote ID</label><br>
-        <input type="button" class="connect-button" id="connect-button" value="Connect" onclick="connect()">
+        <input type="button" class="connect-button" id="connect-button" value="Connect" onclick="connect()"><br>
+        <label for="name" class="form-label">Remote ID</label>
       </div>
     </div>
   </center>
@@ -238,6 +38,16 @@
   </div>
   <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
   <script>
+    // var labelID;
+
+    // $('.form-label').click(function () {
+    //   labelID = $(this).attr('for');
+    //   $('#' + labelID).trigger('focus');
+    // });
+    // $(".form-label").click(function () {
+    //   $(".form-field")[0].click();
+    // });
+
     let input = document.getElementById("remote-id");
     input.addEventListener("keyup", function (event) {
       if (event.keyCode === 13) {
