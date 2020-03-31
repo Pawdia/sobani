@@ -4,12 +4,14 @@ const server = dgram.createSocket('udp4')
 const process = require('process')
 
 // Dependencies
+const fs = require("fs")
 const path = require("path")
-const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut } = require("electron")
+const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut, shell } = require("electron")
 const nativeImage = require("electron").nativeImage
 
 // Local
 const hash = require("./src/utils/hash")
+let config = undefined
 const appConfig = require("./src/config/app.json")
 
 // Audio Support Dependencies
@@ -17,12 +19,11 @@ const prism = require("prism-media")
 const portAudio = require("naudiodon")
 
 // Global
+let appDataPath = path.join(app.getPath("appData"), "Sobani")
+let configPath = path.join(appDataPath, "config.json")
 app.name = "Sobani"
 
-let tracker = {
-    host: "108.61.197.8",
-    port: 3000
-}
+let tracker = {}
 
 let raddr = ""
 let rport = ""
@@ -271,6 +272,58 @@ function quitApp() {
 app.on("ready", () => {
     createTray()
     createWindow()
+
+    if (!fs.existsSync(configPath)) {
+        let configObject = {
+            "tracker": {
+                "host": "",
+                "port": ""
+            }
+        }
+
+        fs.writeFileSync(configPath, JSON.stringify(configObject))
+        delete require.cache[require.resolve("./config.json")]
+        config = require(configPath)
+        let configFatalError = `Configuration file: ${configPath} has been corrupted. ` +
+            "Please check your read and write permission with Sobani or close any application(s) that read it and re-open " +
+            "Sobani and retry again. \n" +
+            "If this problem still happens, send us issue at https://github.com/nekomeowww/sobani"
+        config.tracker !== undefined ? tracker = config.tracker : dialog.showErrorBox("Fatal Error: Configuration file corrupted", configFatalError)
+        shell.openItem(appDataPath)
+        quitApp()
+    }
+    else {
+        config = require(configPath)
+        tracker = {
+            host: config.tracker.host,
+            port: config.tracker.port
+        }
+    }
+
+    if (tracker.host === undefined || tracker.host === "" || tracker.host.trim() === "") {
+        let trackerIsNullFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
+            "directory to see if you have tracker host and tracker port filled in. If not, find the proper one with sobani-tracker instance"
+        dialog.showErrorBox("Tracker configuration is not set", trackerIsNullFatalError)
+        shell.openItem(appDataPath)
+        quitApp()
+    }
+
+    if (parseInt(tracker.port) === NaN || tracker.port === 0 || tracker.port === "" || tracker.port === undefined) {
+        let trackerPortIsNaNFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
+            "directory to see if you have a valid tracker port filled in. If not, find the proper one with sobani-tracker instance"
+        dialog.showErrorBox("Tracker configuration for port is invalid", trackerPortIsNaNFatalError)
+        shell.openItem(appDataPath)
+        quitApp()
+    }
+
+    if (!(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(tracker.host) || /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/igm.test(tracker.host))) {
+        let trackerHostIsInvalidFatalError = `Configuration not set propertily, please check ${configPath} unser application ` +
+            "directory to see if you have a valid tracker host address filled in. Notice that the address starts with 'https://' " +
+            "or 'http://' is not required. If not, find the proper one with sobani-tracker instance"
+        dialog.showErrorBox("Tracker configuration for host is invalid", trackerHostIsInvalidFatalError)
+        shell.openItem(appDataPath)
+        quitApp()
+    }
 
     // Key control
     // macOS or Linux Command + Q
