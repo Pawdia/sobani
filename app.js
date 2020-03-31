@@ -184,7 +184,7 @@ function createWindow() {
     window.loadFile("index.html")
 
     // Open DevTools
-    window.webContents.openDevTools()
+    // window.webContents.openDevTools()
 }
 
 let TrayMenu = [
