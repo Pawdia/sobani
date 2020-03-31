@@ -83,17 +83,15 @@
           // document.getElementsByClassName("lastseen")[0].style.display = "block";
           document.getElementsByClassName("form-group")[0].style.display = "none";
           $(".container").append(`<input type="button" class="disconnect-button" value="Disconnect" onclick="disconnect()">`);
-
-          alert("Connected")
           break;
 
         // If Disconnected
         case "disconnected":
+          document.getElementsByClassName("form-group")[0].style.display = "block";
           document.getElementById("connection-indicator").style.background = "#ff2f5c";
           $("#connection-true")[0].remove();
           $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`);
           $("#connected-user")[0].remove();
-          alert("Disconnected")
           break;
       }
     })
@@ -109,7 +107,7 @@
         alert("Field is required\nMust enter a valid ShareID");
       }
       else {
-        $(".form-group")[0].remove();
+        document.getElementsByClassName("form-group")[0].style.display = "none";
         $(".container").append("<div class='load'></div>");
         window.api.request("connect", text.trim());
       }

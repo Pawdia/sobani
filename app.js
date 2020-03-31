@@ -227,7 +227,6 @@ function createTray() {
 
 function clearSession() {
     incomeInterval === undefined ? 0 : clearInterval(incomeInterval)
-    knocked = false
     knockedInterval === undefined ? 0 : clearInterval(knockedInterval)
     pushed = false
     pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
@@ -413,6 +412,9 @@ server.on('message', (msg, rinfo) => {
                 // If A(B) received "disconnect" action,
                 // clear all intervals and disconnect the current session
             } else if (resp.action == "disconnect" && raddr === rinfo.address && rport === rinfo.port) {
+                console.log(`disconnect action received from ${raddr}:${rport}...`)
+                updateIndicatorToWindow({ status: "disconnect" })
+                knocked = false
                 clearSession()
             }
         } catch (err) {
@@ -461,10 +463,15 @@ ipcMain.on("connect", (event, args) => {
 })
 
 ipcMain.on("disconnect", (event, args) => {
+    knocked = false
+    clearSession()
+    console.log(raddr)
+    console.log(rport)
     let retryTimes = 0
     const disconnectMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "disconnect" }))
     let retryInterval = setInterval(function () {
         retryTimes++
+        console.log("disconnect packet sent from line 470...")
         server.send(disconnectMessage, rport, raddr, (err) => {
             if (err) dialog.showErrorBox(err.message, err.stack)
         })
@@ -476,5 +483,4 @@ ipcMain.on("disconnect", (event, args) => {
         }
     }, 1000)
     updateIndicatorToWindow({ status: "disconnected" })
-    clearSession()
 })
