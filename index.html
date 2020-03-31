@@ -12,18 +12,20 @@
     }
 
     p>span {
-      font-family: monospace;
+      font-family: Monaco, Consolas, monospace, "Microsoft YaHei";
       font-weight: 600;
-      font-size: 1.2rem;
+      font-size: 1rem;
     }
 
     .connect-button {
       color: rgb(255, 183, 0);
       transition-duration: 0.4s;
-      border-radius: 10px;
+      border-radius: 13px;
       border: 2px solid #FAE1A4;
       background-color: #ffffff;
       margin-top: 20px;
+      padding-top: 3px;
+      padding-bottom: 3px;
       padding-right: 20px;
       padding-left: 20px;
       font-size: 1rem;
@@ -40,9 +42,11 @@
       color: #ffffff;
       transition-duration: 0.4s;
       border: 2px solid #FF2F5C;
-      border-radius: 10px;
+      border-radius: 13px;
       background-color: #FF2F5C;
       margin-top: 20px;
+      padding-top: 3px;
+      padding-bottom: 3px;
       padding-right: 20px;
       padding-left: 20px;
       font-size: 1rem;
@@ -143,10 +147,10 @@
     }
 
     .load {
-      width: 72px;
-      height: 72px;
-      margin: 50px auto 0 auto;
-      border: solid 6px #ff78a0;
+      width: 50px;
+      height: 50px;
+      margin: 40px auto 0 auto;
+      border: solid 3px #ff78a0;
       border-radius: 50%;
       border-right-color: transparent;
       border-bottom-color: transparent;
@@ -217,12 +221,12 @@
       <img src="./src/assets/icon.png" style="width: 250px; height: 250px;" />
       <br>
       <p style="font-weight: bold;">Welcome to use Sobani!</p>
-      <p>Current Version: 0.1.0</p>
+      <p>Current Version: 0.1.1</p>
       <div id="shareid-field"></div>
       <div class="form-group field" style="display: block;">
         <input type="text" class="form-field" id="remote-id" placeholder="ShareID" required>
         <label for="name" class="form-label">Remote ID</label><br>
-        <input type="button" class="connect-button" value="Connect" onclick="connect()">
+        <input type="button" class="connect-button" id="connect-button" value="Connect" onclick="connect()">
       </div>
     </div>
   </center>
@@ -234,6 +238,14 @@
   </div>
   <script type="text/javascript" src="./src/assets/js/jquery-3.4.1.min.js"></script>
   <script>
+    let input = document.getElementById("remote-id");
+    input.addEventListener("keyup", function (event) {
+      if (event.keyCode === 13) {
+        event.preventDefault();
+        document.getElementById("connect-button").click();
+      }
+    });
+
     // Announced
     window.api.response("announced", shareId => {
       $("#shareid-field").append(`<p>Your share ID is <span>${shareId}</span></p>`)
@@ -248,7 +260,7 @@
     // Indicator
     window.api.response("indicator", update => {
       var timer
-      switch (update) {
+      switch (update.status) {
 
         // If Connected
         case "connected":
@@ -256,6 +268,7 @@
           document.getElementById("connection-indicator").style.background = "#4CDA7B";
           $("#connection-not")[0].remove();
           $(".indicator").append(`<a class="connection-text" id="connection-true">Connected</a>`);
+          $("#shareid-field").append(`<p id="connected-user">Your are connected with <span>${update.id}</span></p>`);
 
           // document.getElementsByClassName("lastseen")[0].style.display = "block";
           document.getElementsByClassName("form-group")[0].style.display = "none";
@@ -269,6 +282,7 @@
           document.getElementById("connection-indicator").style.background = "#ff2f5c";
           $("#connection-true")[0].remove();
           $(".indicator").append(`<a class="connection-text" id="connection-not">Not Connected</a>`);
+          $("#connected-user")[0].remove();
           alert("Disconnected")
           break;
       }

@@ -5,11 +5,12 @@ const process = require('process')
 
 // Dependencies
 const path = require("path")
-const { app, Menu, Tray, BrowserWindow, ipcMain, dialog } = require("electron")
+const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut } = require("electron")
 const nativeImage = require("electron").nativeImage
 
 // Local
 const hash = require("./src/utils/hash")
+const appConfig = require("./src/config/app.json")
 
 // Audio Support Dependencies
 const prism = require("prism-media")
@@ -34,6 +35,7 @@ let pushed = false
 let pushedInterval = undefined
 let knocked = false
 let knockedInterval = undefined
+let incomeInterval = undefined
 let keepingAlive = false
 
 let pulsing = {
@@ -143,12 +145,12 @@ let devices = portAudio.getDevices()
 devices.forEach(device => {
 
     // In
-    if (device.maxOutputChannels === 0) {
+    if (device.maxInputChannels > 0) {
         inputAudioContextMenu.push(audioContextMenuBuilder(device.name, device.id, "in"))
     }
 
     // Out
-    else if (device.maxInputChannels === 0) {
+    if (device.maxOutputChannels > 0) {
         outputAudioContextMenu.push(audioContextMenuBuilder(device.name, device.id, "out"))
     }
 
@@ -165,7 +167,7 @@ function createWindow() {
         icon: icon,
         resizable: false,
         webPreferences: {
-            nodeIntegration: true,
+            // nodeIntegration: true,
             contextIsolation: true, // protect against prototype pollution
             enableRemoteModule: false, // turn off remote
             preload: path.join(__dirname, "preload.js") // use a preload script
@@ -221,19 +223,27 @@ function createTray() {
     tray.setContextMenu(contextMenu)
 }
 
-function toggleWindow() {
+function clearSession() {
+    incomeInterval === undefined ? 0 : clearInterval(incomeInterval)
+    knocked = false
+    knockedInterval === undefined ? 0 : clearInterval(knockedInterval)
+    pushed = false
+    pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
+}
+
+async function toggleWindow() {
     window.isVisible() ? window.hide() : window.show()
 }
 
-function updateToWindow(info) {
+async function updateToWindow(info) {
     window.webContents.send("control", info)
 }
 
-function updateAnnouncedToWindow(shareId) {
+async function updateAnnouncedToWindow(shareId) {
     window.webContents.send("announced", shareId)
 }
 
-function updateIndicatorToWindow(update) {
+async function updateIndicatorToWindow(update) {
     window.webContents.send("indicator", update)
 }
 
@@ -246,9 +256,28 @@ server.on('listening', () => {
 // Server bind
 server.bind()
 
+// Application Quiting Function
+function quitApp() {
+    if (audioInDevice.deviceInstance != null) audioInDevice.deviceInstance.quit()
+    if (audioOutDevice.deviceInstance != null) audioOutDevice.deviceInstance.quit()
+    app.quit()
+}
+
+// When ready
 app.on("ready", () => {
     createTray()
     createWindow()
+
+    // Key control
+    // macOS or Linux Command + Q
+    globalShortcut.register('CommandOrControl+Q', quitApp)
+    // Windows & Linux
+    globalShortcut.register('Alt+F4', quitApp)
+    // Disable refresh
+    if (!appConfig.development) {
+        globalShortcut.register("CommandOrControl+R", () => { return undefined })
+        globalShortcut.register("F5", () => { return undefined })
+    }
 })
 
 // Window close control
@@ -329,7 +358,7 @@ server.on('message', (msg, rinfo) => {
                 }
                 knocked = true
                 updateToWindow(`peer knocked: ${msg} from ${rinfo.address}:${rinfo.port}`)
-                updateIndicatorToWindow("connected")
+                updateIndicatorToWindow({ status: "connected", id: resp.id })
                 const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "answer" }))
                 server.send(message, rinfo.port, rinfo.address, (err) => {
                     if (err) dialog.showErrorBox(err.message, err.stack)
@@ -349,13 +378,13 @@ server.on('message', (msg, rinfo) => {
                 // connection between A and B will become active on NAT A
                 const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "knock" }))
                 updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
-                setInterval(() => {
+                incomeInterval = setInterval(() => {
                     if (!knocked) {
                         server.send(message, push_id_info[1], push_id_info[0], (err) => {
                             if (err) dialog.showErrorBox(err.message, err.stack)
                         })
                     } else {
-                        updateIndicatorToWindow("connected")
+                        updateIndicatorToWindow({ status: "connected", id: resp.id })
                     }
                 }, 1000)
             } else if (resp.action == "msg") {
@@ -379,6 +408,10 @@ server.on('message', (msg, rinfo) => {
                 // last seen at xxxxx
                 window.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
                 // updateIndicatorToWindow("connected")
+                // If A(B) received "disconnect" action,
+                // clear all intervals and disconnect the current session
+            } else if (resp.action == "disconnect" && raddr === rinfo.address && rport === rinfo.port) {
+                clearSession()
             }
         } catch (err) {
             console.log(err)
@@ -386,9 +419,16 @@ server.on('message', (msg, rinfo) => {
     }
 })
 
+// Opus Buffer
+function writeToBuffer(deviceInstance, buf) {
+    return new Promise((resolve, reject) => {
+        deviceInstance.write(buf)
+    })
+}
+
 // Opus Decoder
-opusDecoder.on('data', buf => {
-    if (audioOutDevice.deviceInstance !== null) audioOutDevice.deviceInstance.write(buf)
+opusDecoder.on('data', async buf => {
+    if (audioOutDevice.deviceInstance !== null) await writeToBuffer(audioOutDevice.deviceInstance, buf)
 })
 
 // Opus Encoder
@@ -419,9 +459,18 @@ ipcMain.on("connect", (event, args) => {
 })
 
 ipcMain.on("disconnect", (event, args) => {
-    updateIndicatorToWindow("disconnected")
-    knocked = false
-    knockedInterval === undefined ? 0 : clearInterval(knockedInterval)
-    pushed = false
-    pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
+    let retryTimes = 0
+    const disconnectMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "disconnect" }))
+    let retryInterval = setInterval(function () {
+        retryTimes++
+        server.send(disconnectMessage, rinfo.port, rinfo.address, (err) => {
+            if (err) dialog.showErrorBox(err.message, err.stack)
+        })
+        if (retryTimes >= 4) {
+            retryTimes = 0
+            clearInterval(retryInterval)
+        }
+    }, 1000)
+    updateIndicatorToWindow({ status: "disconnected" })
+    clearSession()
 })
