@@ -40,8 +40,8 @@ jobs:
     - name: Build dist
       run: yarn dist
     
-    - name: Download artifact
-      uses: actions/download-artifact@v1.0.0
+    - name: Upload artifact
+      uses: actions/upload-artifact@v1.0.0
       with:
-        name: dist/Sobani-*
+        name: Sobani*
         path: dist/
