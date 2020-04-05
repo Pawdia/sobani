@@ -56,11 +56,6 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd dist
-# This is a basic workflow to help you get started with Actions
-        rm -rf mac || true
-        rm -f *.zip || true
-        rm -f *.blockmap || true
-      if: matrix.os == 'macos-latest'
         rm -f latest-mac.yml || true
         rm -f builder-effective-config.yaml || true
         DiskImage=`ls Sobani-*.dmg`
