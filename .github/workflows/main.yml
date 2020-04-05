@@ -47,7 +47,7 @@ jobs:
       if: matrix.os == 'ubuntu-18.04'
       run: |
         cd dist
-        rm -rf linux-unpacke || true
+        rm -rf linux-unpacked || true
         AppImage=`ls Sobani-*.AppImage`
         DistFile=${AppImage%AppImage}-linux-x64.AppImage
         mv $AppImage $DistFile
