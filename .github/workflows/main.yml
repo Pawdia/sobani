@@ -1,14 +1,16 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
+name: Sobani-build
 
 # Controls when the action will run. Triggers the workflow on push or pull request
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    tags:
+      - v**
   pull_request:
     branches: [ master ]
+  release:
+    types:
+      - created
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -54,11 +56,6 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         cd dist
-# This is a basic workflow to help you get started with Actions
-        rm -rf mac || true
-        rm -f *.zip || true
-        rm -f *.blockmap || true
-      if: matrix.os == 'macos-latest'
         rm -f latest-mac.yml || true
         rm -f builder-effective-config.yaml || true
         DiskImage=`ls Sobani-*.dmg`
@@ -69,7 +66,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: |
         cd dist
-        rmdir /q /s win-unpacked
+        rm -r -fo win-unpacked
 
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
