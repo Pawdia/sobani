@@ -14,8 +14,12 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-18.04
+          - macos-10.14
+    runs-on: ${{ matrix.os }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -32,16 +36,29 @@ jobs:
 
     # Install dev dependencies
     - name: Install dev dependencies
-      run: |
-        rm -rf /home/runner/.cache/electron-builder
-        yarn install --dev
+      run: yarn install --dev
 
     # Build dist
     - name: Build dist
-      run: yarn dist
+      run: |
+        rm -rf /home/runner/.cache/electron-builder
+        yarn dist
+
+    - name: Prepare for uploading dist (linux)
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        AppImage=`ls dist/Sobani-*.AppImage`
+        export DistFile=${AppImage%AppImage}-linux-x64.AppImage
+        mv $AppImage $DistFile
     
+    - name: Prepare for uploading dist (macOS)
+      if: matrix.os == 'macos-10.14'
+      run: |
+        DiskImage=`ls dist/Sobani-*.dmg`
+        export DistFile=${DiskImage%dmg}-macos-x64.dmg
+        mv $DiskImage $DistFile
+
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
       with:
-        name: Sobani*
-        path: dist/
+        name: $DistFile
