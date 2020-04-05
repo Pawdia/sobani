@@ -26,8 +26,13 @@ jobs:
     - name: Setup Node.js for use with actions
       uses: actions/setup-node@v1.1.0
     
+    # Install yarn
     - name: Yarn CLI
       uses: CultureHQ/actions-yarn@v1.0.1
+
+    # Install dev dependencies
+    - name: Build dist
+      run: yarn install --dev
 
     # Build dist
     - name: Build dist
