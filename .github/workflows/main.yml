@@ -32,7 +32,9 @@ jobs:
 
     # Install dev dependencies
     - name: Install dev dependencies
-      run: yarn install --dev
+      run: |
+        rm -rf /home/runner/.cache/electron-builder
+        yarn install --dev
 
     # Build dist
     - name: Build dist
