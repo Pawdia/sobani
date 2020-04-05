@@ -39,3 +39,9 @@ jobs:
     # Build dist
     - name: Build dist
       run: yarn dist
+    
+    - name: Download artifact
+      uses: actions/download-artifact@v1.0.0
+      with:
+        name: dist/Sobani-*
+        path: dist/
