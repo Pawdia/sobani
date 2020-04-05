@@ -14,8 +14,13 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-18.04
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -25,15 +30,49 @@ jobs:
     # Setup Node.js
     - name: Setup Node.js for use with actions
       uses: actions/setup-node@v1.1.0
-    
-    # Install yarn
-    - name: Yarn CLI
-      uses: CultureHQ/actions-yarn@v1.0.1
 
-    # Install dev dependencies
-    - name: Build dist
-      run: yarn install --dev
+    # Install yarn and other dev dependencies
+    - name: Install yarn and dev dependencies
+      run: |
+        npm install -g yarn
+        yarn install --dev
 
     # Build dist
     - name: Build dist
       run: yarn dist
+
+    - name: Prepare for uploading dist (linux)
+      if: matrix.os == 'ubuntu-18.04'
+      run: |
+        cd dist
+        rm -rf linux-unpacked || true
+        AppImage=`ls Sobani-*.AppImage`
+        DistFile=${AppImage%AppImage}-linux-x64.AppImage
+        mv $AppImage $DistFile
+
+    - name: Prepare for uploading dist (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        cd dist
+# This is a basic workflow to help you get started with Actions
+        rm -rf mac || true
+        rm -f *.zip || true
+        rm -f *.blockmap || true
+      if: matrix.os == 'macos-latest'
+        rm -f latest-mac.yml || true
+        rm -f builder-effective-config.yaml || true
+        DiskImage=`ls Sobani-*.dmg`
+        DistFile=${DiskImage%.dmg}-macos-x64.dmg
+        mv $DiskImage $DistFile
+
+    - name: Prepare for uploading dist (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd dist
+        rmdir /q /s win-unpacked
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v1.0.0
+      with:
+        name: Sobani-${{ matrix.os }}
+        path: dist/
