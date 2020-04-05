@@ -31,7 +31,7 @@ jobs:
       uses: actions/setup-node@v1.1.0
     
     # Install yarn and other dev dependencies
-    - name: Install dev dependencies
+    - name: Install yarn and dev dependencies
       run: |
         npm install -g yarn
         yarn install --dev
@@ -45,14 +45,16 @@ jobs:
     - name: Prepare for uploading dist (linux)
       if: matrix.os == 'ubuntu-18.04'
       run: |
-        AppImage=`ls dist/Sobani-*.AppImage`
+        cd dist
+        AppImage=`ls Sobani-*.AppImage`
         export DistFile=${AppImage%AppImage}-linux-x64.AppImage
         mv $AppImage $DistFile
     
     - name: Prepare for uploading dist (macOS)
       if: matrix.os == 'macos-10.14'
       run: |
-        DiskImage=`ls dist/Sobani-*.dmg`
+        cd dist
+        DiskImage=`ls Sobani-*.dmg`
         export DistFile=${DiskImage%dmg}-macos-x64.dmg
         mv $DiskImage $DistFile
 
@@ -60,3 +62,4 @@ jobs:
       uses: actions/upload-artifact@v1.0.0
       with:
         name: $DistFile
+        path: dist/
