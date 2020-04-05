@@ -19,6 +19,7 @@ jobs:
         os:
           - ubuntu-18.04
           - macos-latest
+          - windows-latest
     runs-on: ${{ matrix.os }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -60,6 +61,12 @@ jobs:
         DiskImage=`ls Sobani-*.dmg`
         DistFile=${DiskImage%.dmg}-macos-x64.dmg
         mv $DiskImage $DistFile
+    
+    - name: Prepare for uploading dist (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd dist
+        dir .
 
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
