@@ -67,7 +67,7 @@ jobs:
       if: matrix.os == 'windows-latest'
       run: |
         cd dist
-        dir .
+        rmdir /q /s win-unpacked
 
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
