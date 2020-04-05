@@ -78,4 +78,3 @@ jobs:
       with:
         name: Sobani-${{ matrix.os }}
         path: dist/
-
