@@ -39,9 +39,7 @@ jobs:
 
     # Build dist
     - name: Build dist
-      run: |
-        rm -rf /home/runner/.cache/electron-builder || true
-        yarn dist
+      run: yarn dist
 
     - name: Prepare for uploading dist (linux)
       if: matrix.os == 'ubuntu-18.04'
@@ -58,6 +56,9 @@ jobs:
         cd dist
         rm -rf mac || true
         rm -f *.zip || true
+        rm -f *.blockmap || true
+        rm -f latest-mac.yml || true
+        rm -f builder-effective-config.yaml || true
         DiskImage=`ls Sobani-*.dmg`
         DistFile=${DiskImage%.dmg}-macos-x64.dmg
         mv $DiskImage $DistFile
