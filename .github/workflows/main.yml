@@ -18,7 +18,7 @@ jobs:
       matrix:
         os:
           - ubuntu-18.04
-          - macos-10.14
+          - macos-latest
     runs-on: ${{ matrix.os }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -46,20 +46,23 @@ jobs:
       if: matrix.os == 'ubuntu-18.04'
       run: |
         cd dist
+        rm -rf linux-unpacke || true
         AppImage=`ls Sobani-*.AppImage`
-        export DistFile=${AppImage%AppImage}-linux-x64.AppImage
+        DistFile=${AppImage%AppImage}-linux-x64.AppImage
         mv $AppImage $DistFile
     
     - name: Prepare for uploading dist (macOS)
-      if: matrix.os == 'macos-10.14'
+      if: matrix.os == 'macos-latest'
       run: |
         cd dist
+        rm -rf mac || true
+        rm -f *.zip || true
         DiskImage=`ls Sobani-*.dmg`
-        export DistFile=${DiskImage%dmg}-macos-x64.dmg
+        DistFile=${DiskImage%.dmg}-macos-x64.dmg
         mv $DiskImage $DistFile
 
     - name: Upload artifact
       uses: actions/upload-artifact@v1.0.0
       with:
-        name: $DistFile
+        name: Sobani-${{ matrix.os }}
         path: dist/
