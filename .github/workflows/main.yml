@@ -30,18 +30,16 @@ jobs:
     - name: Setup Node.js for use with actions
       uses: actions/setup-node@v1.1.0
     
-    # Install yarn
-    - name: Yarn CLI
-      uses: CultureHQ/actions-yarn@v1.0.1
-
-    # Install dev dependencies
+    # Install yarn and other dev dependencies
     - name: Install dev dependencies
-      run: yarn install --dev
+      run: |
+        npm install -g yarn
+        yarn install --dev
 
     # Build dist
     - name: Build dist
       run: |
-        rm -rf /home/runner/.cache/electron-builder
+        rm -rf /home/runner/.cache/electron-builder || true
         yarn dist
 
     - name: Prepare for uploading dist (linux)
