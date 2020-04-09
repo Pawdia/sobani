@@ -100,7 +100,7 @@ function audioContextMenuBuilder(deviceName, deviceId, type) {
             console.log("Setting up device...")
             switch (type) {
                 case "in":
-                    if (audioInDevice.started && audioInDevice.deviceInstance !== null) {
+                    if (audioInDevice.deviceInstance !== null) {
                         console.log("Switching device...")
                         audioInDevice.deviceInstance.quit()
                     }
@@ -119,7 +119,7 @@ function audioContextMenuBuilder(deviceName, deviceId, type) {
                     })
                     break
                 case "out":
-                    if (audioOutDevice.started && audioOutDevice.deviceInstance !== null) {
+                    if (audioOutDevice.deviceInstance !== null) {
                         console.log("Switching device...")
                         audioOutDevice.deviceInstance.quit()
                     }
