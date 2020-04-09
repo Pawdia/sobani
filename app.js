@@ -349,6 +349,15 @@ app.on("ready", () => {
         globalShortcut.register("CommandOrControl+R", () => { return undefined })
         globalShortcut.register("F5", () => { return undefined })
     }
+    
+    // Announce to tracker when user interface gets ready
+    setInterval(() => {
+        if (!announced) {
+            server.send(announceMessage, tracker.port, tracker.host, (err) => {
+                if (err) console.log(err)
+            })
+        }
+    }, 1000)
 })
 
 // Window close control
@@ -374,14 +383,6 @@ app.on("browser-window-blur", () => {
 })
 
 // Main
-setInterval(() => {
-    if (!announced) {
-        server.send(announceMessage, tracker.port, tracker.host, (err) => {
-            if (err) console.log(err)
-        })
-    }
-}, 1000)
-
 server.on('message', (msg, rinfo) => {
     if (msg.length >= 8 && msg.slice(0, 8).toString() === "audiobuf") {
         if (knocked) opusDecoder.write(msg.slice(8))
