@@ -9,26 +9,39 @@ const path = require("path")
 const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut, shell } = require("electron")
 const nativeImage = require("electron").nativeImage
 
-// Local
-const hash = require("./src/utils/hash")
-let config = undefined
-const appConfig = require("./src/config/app.json")
-const audio = require("./src/core/audio")
-
 // Global
+const Global = require("./src/core/storage/global")
+const appConfig = require("./src/config/app.json")
 let appDataPath = path.join(app.getPath("appData"), "Sobani")
 let configPath = path.join(appDataPath, "config.json")
+
+Global.Add("config", undefined)
+Global.Add("appConfig", appConfig)
+Global.Add("appDataPath", appDataPath)
+Global.Add("configPath", configPath)
+
+// Local
+const init = require("./src/core/init")
+const hash = require("./src/utils/hash")
+let config = undefined
+const audio = require("./src/core/audio")
+const peerSession = require("./src/core/peerSession")
+const Self = require("./src/core/session/session")
+const constant = require("./src/core/const")
+
 app.name = "Sobani"
 
-let tracker = {}
+let tracker = undefined
+let self = new Self()
 
 let raddr = ""
 let rport = ""
 
 const nowTime = new Date().toString()
 const clientIdentity = hash.sha256(nowTime).substring(0, 8)
-const audioPrefix = Buffer.from('audiobuf')
+const audioPrefix = Buffer.from(constant.__AudiobufPrefix)
 
+// todo: disconnected: remote peer
 let disconnected = false
 let announced = false
 let pushed = false
@@ -41,9 +54,6 @@ let keepingAlive = false
 let pulsing = {
     retry: 0
 }
-
-const aliveMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alive" }))
-const announceMessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "announce" }))
 
 const isMac = process.platform === 'darwin'
 const isWin = process.platform === 'win32'
@@ -162,6 +172,8 @@ function quitApp() {
     app.quit()
 }
 
+Global.Add("quitApp", quitApp)
+
 // When ready
 app.on("ready", () => {
     let configErrored = false
@@ -169,70 +181,13 @@ app.on("ready", () => {
     createTray()
     createWindow()
 
-    if (!fs.existsSync(configPath)) {
-        let configObject = {
-            "tracker": {
-                "host": "",
-                "port": ""
-            }
-        }
-
-        fs.writeFileSync(configPath, JSON.stringify(configObject))
-        delete require.cache[require.resolve("./config.json")]
-        config = require(configPath)
-        let configFatalError = `Configuration file: ${configPath} has been corrupted. ` +
-            "Please check your read and write permission with Sobani or close any application(s) that read it and re-open " +
-            "Sobani and retry again. \n" +
-            "If this problem still happens, send us issue at https://github.com/nekomeowww/sobani"
-        config.tracker !== undefined ? tracker = config.tracker : dialog.showErrorBox("Fatal Error: Configuration file corrupted", configFatalError)
-        if (!configErrored) {
-            shell.openItem(appDataPath)
-            configErrored = true
-        }
-        quitApp()
+    if (appConfig.debug) {
+        init.debug()
     }
     else {
-        config = require(configPath)
-        tracker = {
-            host: config.tracker.host,
-            port: config.tracker.port
-        }
+        init.standard()
     }
-
-    if (tracker.host === undefined || tracker.host === "" || tracker.host.trim() === "") {
-        let trackerIsNullFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
-            "directory to see if you have tracker host and tracker port filled in. If not, find the proper one with sobani-tracker instance"
-        dialog.showErrorBox("Tracker configuration is not set", trackerIsNullFatalError)
-        if (!configErrored) {
-            shell.openItem(appDataPath)
-            configErrored = true
-        }
-        quitApp()
-    }
-
-    if (parseInt(tracker.port) === NaN || tracker.port === 0 || tracker.port === "" || tracker.port === undefined) {
-        let trackerPortIsNaNFatalError = `Configuration not set propertily, please check ${configPath} under application ` +
-            "directory to see if you have a valid tracker port filled in. If not, find the proper one with sobani-tracker instance"
-        dialog.showErrorBox("Tracker configuration for port is invalid", trackerPortIsNaNFatalError)
-        if (!configErrored) {
-            shell.openItem(appDataPath)
-            configErrored = true
-        }
-        quitApp()
-    }
-
-    if (!(/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(tracker.host) || /^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/igm.test(tracker.host))) {
-        let trackerHostIsInvalidFatalError = `Configuration not set propertily, please check ${configPath} unser application ` +
-            "directory to see if you have a valid tracker host address filled in. Notice that the address starts with 'https://' " +
-            "or 'http://' is not required. If not, find the proper one with sobani-tracker instance"
-        dialog.showErrorBox("Tracker configuration for host is invalid", trackerHostIsInvalidFatalError)
-        if (!configErrored) {
-            shell.openItem(appDataPath)
-            configErrored = true
-        }
-        quitApp()
-    }
-
+    
     // Key control
     // macOS or Linux Command + Q
     globalShortcut.register('CommandOrControl+Q', quitApp)
@@ -245,9 +200,11 @@ app.on("ready", () => {
     }
     
     // Announce to tracker when user interface gets ready
+    tracker = Global.Read("tracker")
+    self.start(tracker.host, tracker.port, clientIdentity)
     setInterval(() => {
-        if (!announced) {
-            server.send(announceMessage, tracker.port, tracker.host, (err) => {
+        if (!self.announced()) {
+            server.send(self.genAnnounceMessage(), self.trackerPort(), self.trackerAddr(), (err) => {
                 if (err) console.log(err)
             })
         }
@@ -257,6 +214,7 @@ app.on("ready", () => {
 // Window close control
 app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
+        audio.quit()
         app.quit()
     }
 })
@@ -278,62 +236,66 @@ app.on("browser-window-blur", () => {
 
 // Main
 server.on('message', (msg, rinfo) => {
-    if (msg.length >= 8 && msg.slice(0, 8).toString() === "audiobuf") {
+    if (msg.length >= 8 && msg.slice(0, 8).toString() === constant.__AudiobufPrefix) {
+        // todo: find corresponding AudioSession
         if (knocked) audio.opusDecoder.write(msg.slice(8))
     } else {
         try {
             resp = JSON.parse(msg)
-            if (resp.action == "announced") {
-                announced = true
+            if (resp.action === constant.__AnnouncedAction) {
+                self.setShareId(resp.data.shareId)
                 updateAnnouncedToWindow(resp.data.shareId)
                 // keep alive with tracker
-                if (!keepingAlive) {
+                if (!self.isKeepingAlive()) {
                     keepingAlive = true
+                    let aliveMessage = self.genAliveMessage()
                     setInterval(() => {
-                        server.send(aliveMessage, tracker.port, tracker.host, (err) => {
+                        server.send(aliveMessage, self.trackerPort(), self.trackerAddr(), (err) => {
                             if (err) dialog.showErrorBox(err.message, err.stack)
                         })
                     }, 2000)
                 }
-            } else if (resp.action == "pushed") {
+            } else if (resp.action === constant.__PushedAction) {
                 // Server -> A
                 pushed = true
                 pushedInterval === undefined ? 0 : clearInterval(pushedInterval)
                 // "5.6.7.8:2333"
                 peeraddr_info = resp.data.peeraddr.split(":")
                 // B addr:port
-                raddr = peeraddr_info[0]
-                rport = peeraddr_info[1]
+                let remotePeer = peerSession.findPeerOrInsert(peeraddr_info[0], peeraddr_info[1])
+                remotePeer.status = "knock sent"
+                // raddr = peeraddr_info[0]
+                // rport = peeraddr_info[1]
 
                 // A -> NAT A -> NAT B -!> B
                 // NAT A will wait for B resp
-                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "knock" }))
+                const message = self.genKnockMessage()
                 server.send(message, rport, raddr, (err) => {
                     if (err) dialog.showErrorBox(err.message, err.stack)
                 })
-            } else if (resp.action == "knock") {
-                // from peer
-                if (!knocked) {
-                    // keep alive with peer
-                    knockedInterval = setInterval(() => {
-                        const alivemessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alived" }))
-                        server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
-                            if (err) dialog.showErrorBox(err.message, err.stack)
-                        })
-                    }, 2000)
+            } else if (resp.action === constant.__KnockAction) {
+                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
+                if (remotePeer !== undefined) {
+                    if (!remotePeer.knocked) {
+                        remotePeer.knockedInterval = setInterval(() => {
+                            const alivemessage = self.genAliveMessage()
+                            server.send(alivemessage, remotePeer.port, remotePeer.addr, (err) => {
+                                if (err) dialog.showErrorBox(err.message, err.stack)
+                            })
+                        }, 2000)
+                    }
+                    remotePeer.knocked = true
+                    remotePeer.disconnected = false
+                    updateToWindow(`peer knocked: ${msg} from ${remotePeer.addr}:${remotePeer.port}`)
+                    updateIndicatorToWindow({ status: "connected", id: resp.id })
+                    const message = self.genAnswerMessage()
+                    server.send(message, remotePeer.port, remotePeer.addr, (err) => {
+                        if (err) dialog.showErrorBox(err.message, err.stack)
+                    })
                 }
-                knocked = true
-                updateToWindow(`peer knocked: ${msg} from ${rinfo.address}:${rinfo.port}`)
-                disconnected = false
-                updateIndicatorToWindow({ status: "connected", id: resp.id })
-                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "answer" }))
-                server.send(message, rinfo.port, rinfo.address, (err) => {
-                    if (err) dialog.showErrorBox(err.message, err.stack)
-                })
-
-                raddr = rinfo.address
-                rport = rinfo.port
-            } else if (resp.action == "income") {
+                // raddr = rinfo.address
+                // rport = rinfo.port
+            } else if (resp.action === constant.__IncomeAction) {
                 // Server -> B
                 // A addr:port
                 push_id_info = resp.data.peeraddr.split(":")
@@ -343,27 +305,32 @@ server.on('message', (msg, rinfo) => {
                 // so NAT A will forward this resp to A
                 // at this point
                 // connection between A and B will become active on NAT A
-                const message = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "knock" }))
+                let remotePeer = peerSession.findPeerOrInsert(push_id_info[0], push_id_info[1])
+                remotePeer.status = "knock sent"
+
+                const message = self.genKnockMessage()
                 updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
-                incomeInterval = setInterval(() => {
-                    if (!knocked) {
-                        server.send(message, push_id_info[1], push_id_info[0], (err) => {
+                remotePeer.incomeInterval = setInterval(() => {
+                    if (!remotePeer.knocked) {
+                        server.send(message, remotePeer.port, remotePeer.addr, (err) => {
                             if (err) dialog.showErrorBox(err.message, err.stack)
                         })
                     } else {
-                        disconnected = false
+                        clearInterval(remotePeer.incomeInterval)
+                        remotePeer.disconnected = false
                         updateIndicatorToWindow({ status: "connected", id: resp.id })
                     }
                 }, 1000)
-            } else if (resp.action == "msg") {
-                // console.log(`\n-> [${resp.id}]: ${resp.msg}`)
-            } else if (resp.action == "answer") {
+            } else if (resp.action === constant.__ChatAction) {
+                // todo: ChatSession
+                console.log(`\n-> [${resp.id}]: ${resp.msg}`)
+            } else if (resp.action === constant.__AnswerAction) {
                 knocked = true
                 updateToWindow(`peer answered: ${msg} from ${rinfo.address}:${rinfo.port}`)
                 disconnected = false
                 updateIndicatorToWindow({ status: "connected", id: resp.id })
                 setInterval(() => {
-                    const alivemessage = Buffer.from(JSON.stringify({ "id": clientIdentity, "action": "alived" }))
+                    const alivemessage = self.genAliveMessage()
                     server.send(alivemessage, rinfo.port, rinfo.address, (err) => {
                         if (err) dialog.showErrorBox(err.message, err.stack)
                     })
@@ -371,7 +338,7 @@ server.on('message', (msg, rinfo) => {
 
                 raddr = rinfo.address
                 rport = rinfo.port
-            } else if (resp.action === "alived") {
+            } else if (resp.action === constant.__AlivedAction) {
 
                 let date = new Date()
                 // last seen at xxxxx
@@ -379,11 +346,11 @@ server.on('message', (msg, rinfo) => {
                 // updateIndicatorToWindow("connected")
                 // If A(B) received "disconnect" action,
                 // clear all intervals and disconnect the current session
-            } else if (resp.action == "disconnect" && raddr === rinfo.address && rport === rinfo.port) {
-                if (!disconnected) {
+            } else if (resp.action === constant.__DisconnectAction && raddr === rinfo.address && rport === rinfo.port) {
+                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
+                if (remotePeer !== undefined && !remotePeer.disconnected) {
                     updateIndicatorToWindow({ status: "disconnected" })
-                    knocked = false
-                    disconnected = true
+                    remotePeer.disconnect()
                     clearSession()
                 }
             }
