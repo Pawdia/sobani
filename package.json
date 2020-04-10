@@ -16,7 +16,7 @@
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder --publish=never"
   },
   "build": {
     "appId": "moe.ayaka.sobani",
@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@discordjs/opus": "^0.1.0",
+    "log4js": "^6.1.2",
     "naudiodon": "^2.1.2",
     "prism-media": "^1.2.1"
   }
