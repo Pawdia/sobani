@@ -13,10 +13,7 @@ const nativeImage = require("electron").nativeImage
 const hash = require("./src/utils/hash")
 let config = undefined
 const appConfig = require("./src/config/app.json")
-
-// Audio Support Dependencies
-const prism = require("prism-media")
-const portAudio = require("naudiodon")
+const audio = require("./src/core/audio")
 
 // Global
 let appDataPath = path.join(app.getPath("appData"), "Sobani")
@@ -30,6 +27,7 @@ let rport = ""
 
 const nowTime = new Date().toString()
 const clientIdentity = hash.sha256(nowTime).substring(0, 8)
+const audioPrefix = Buffer.from('audiobuf')
 
 let disconnected = false
 let announced = false
@@ -53,114 +51,11 @@ const isLinux = process.platform === 'linux'
 // const isFreeBSD = process.platform === 'freebsd'
 // const isOpenBSD = process.platform === 'openbsd'
 
-// Preset for Audio properties
-const audioPrefix = Buffer.from('audiobuf')
-let opusEncoder = new prism.opus.Encoder({
-    rate: 48000,
-    channels: 2,
-    frameSize: 960
-})
-let opusDecoder = new prism.opus.Decoder({
-    rate: 48000,
-    channels: 2,
-    frameSize: 960
-})
-
 // Image and Icon
 let icon = nativeImage.createFromPath(path.join(__dirname, "src/assets/icon.png"))
 let trayIcon = nativeImage.createFromPath(path.join(__dirname, "src/assets/tray.png"))
 let tray = undefined
 let window = undefined
-
-// Audio Preparation
-let audioOutDevice = {
-    started: false,
-    deviceInstance: null
-}
-let audioInDevice = {
-    started: false,
-    deviceInstance: null
-}
-
-let audioDeviceOption = {
-    channelCount: 1,
-    sampleFormat: portAudio.SampleFormat16Bit,
-    sampleRate: 48000,
-    deviceId: 0,
-    closeOnError: false
-}
-
-let sterro = false
-
-function audioContextMenuBuilder(deviceName, deviceId, type) {
-
-    let contextMenuObject = {
-        label: `${deviceId}: ${deviceName}`,
-        click: function () {
-            console.log("Setting up device...")
-            switch (type) {
-                case "in":
-                    if (audioInDevice.started && audioInDevice.deviceInstance !== null) {
-                        console.log("Switching device...")
-                        audioInDevice.deviceInstance.quit()
-                    }
-                    let inOption = audioDeviceOption
-                    inOption.deviceId = deviceId
-                    audioInDevice.deviceInstance = new portAudio.AudioIO({
-                        inOptions: inOption
-                    })
-                    console.log("Input device selected: " + deviceName)
-                    audioInDevice.started = true
-                    audioInDevice.deviceInstance.start()
-                    audioInDevice.deviceInstance.on('data', buf => {
-                        if (knocked) {
-                            opusEncoder.write(buf)
-                        }
-                    })
-                    break
-                case "out":
-                    if (audioOutDevice.started && audioOutDevice.deviceInstance !== null) {
-                        console.log("Switching device...")
-                        audioOutDevice.deviceInstance.quit()
-                    }
-                    let outOption = audioDeviceOption
-                    outOption.deviceId = deviceId
-                    audioOutDevice.deviceInstance = new portAudio.AudioIO({
-                        outOptions: outOption
-                    })
-                    console.log("Output device selected: " + deviceName)
-                    audioInDevice.started = true
-                    audioOutDevice.deviceInstance.start()
-                    break
-                default:
-                    process.exit()
-                    break
-            }
-        }
-    }
-
-    return contextMenuObject
-}
-
-let inputAudioContextMenu = new Array()
-let outputAudioContextMenu = new Array()
-
-let devices = portAudio.getDevices()
-devices.forEach(device => {
-
-    // In
-    if (device.maxInputChannels > 0) {
-        inputAudioContextMenu.push(audioContextMenuBuilder(device.name, device.id, "in"))
-    }
-
-    // Out
-    if (device.maxOutputChannels > 0) {
-        outputAudioContextMenu.push(audioContextMenuBuilder(device.name, device.id, "out"))
-    }
-
-
-    console.log(`[${device.hostAPIName} | ${device.id}] ${device.name}`)
-})
 
 function createWindow() {
     window = new BrowserWindow({
@@ -197,11 +92,11 @@ let TrayMenu = [
     },
     {
         label: "Audio Input",
-        submenu: inputAudioContextMenu
+        submenu: audio.getAudioContextMenu().input
     },
     {
         label: "Audio Output",
-        submenu: outputAudioContextMenu
+        submenu: audio.getAudioContextMenu().output
     },
     {
         label: "Mono",
@@ -263,8 +158,7 @@ server.bind()
 
 // Application Quiting Function
 function quitApp() {
-    if (audioInDevice.deviceInstance != null) audioInDevice.deviceInstance.quit()
-    if (audioOutDevice.deviceInstance != null) audioOutDevice.deviceInstance.quit()
+    audio.quit()
     app.quit()
 }
 
@@ -349,6 +243,15 @@ app.on("ready", () => {
         globalShortcut.register("CommandOrControl+R", () => { return undefined })
         globalShortcut.register("F5", () => { return undefined })
     }
+    
+    // Announce to tracker when user interface gets ready
+    setInterval(() => {
+        if (!announced) {
+            server.send(announceMessage, tracker.port, tracker.host, (err) => {
+                if (err) console.log(err)
+            })
+        }
+    }, 1000)
 })
 
 // Window close control
@@ -374,17 +277,9 @@ app.on("browser-window-blur", () => {
 })
 
 // Main
-setInterval(() => {
-    if (!announced) {
-        server.send(announceMessage, tracker.port, tracker.host, (err) => {
-            if (err) console.log(err)
-        })
-    }
-}, 1000)
-
 server.on('message', (msg, rinfo) => {
     if (msg.length >= 8 && msg.slice(0, 8).toString() === "audiobuf") {
-        if (knocked) opusDecoder.write(msg.slice(8))
+        if (knocked) audio.opusDecoder.write(msg.slice(8))
     } else {
         try {
             resp = JSON.parse(msg)
@@ -506,12 +401,12 @@ function writeToBuffer(deviceInstance, buf) {
 }
 
 // Opus Decoder
-opusDecoder.on('data', async buf => {
-    if (audioOutDevice.deviceInstance !== null) await writeToBuffer(audioOutDevice.deviceInstance, buf)
+audio.opusDecoder.on('data', async buf => {
+    if (audio.outputDevice.deviceInstance !== null) await writeToBuffer(audio.outputDevice.deviceInstance, buf)
 })
 
 // Opus Encoder
-opusEncoder.on('data', buf => {
+audio.opusEncoder.on('data', buf => {
     if (knocked) {
         server.send(Buffer.concat([audioPrefix, buf]), rport, raddr, err => {
             if (err) {

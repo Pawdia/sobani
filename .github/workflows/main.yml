@@ -58,6 +58,8 @@ jobs:
         cd dist
         rm -f latest-mac.yml || true
         rm -f builder-effective-config.yaml || true
+        rm -rf mac || true
+        rm -f *.zip || true
         DiskImage=`ls Sobani-*.dmg`
         DistFile=${DiskImage%.dmg}-macos-x64.dmg
         mv $DiskImage $DistFile
