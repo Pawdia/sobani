@@ -10,6 +10,7 @@ let self = {
     announced: false,
     keepingAlive: false,
 
+    pushedInterval: undefined,
     keepaliveInterval: undefined,
 }
 
@@ -25,7 +26,7 @@ class Self {
         Log.debug(`Tracker set to ${trackerAddr}:${trackerPort}`)
         self.trackerAddr = trackerAddr
         self.trackerPort = trackerPort
-        self.clientId = clientId
+        self.shareId = clientId
     }
 
     setShareId(shareId) {
@@ -38,19 +39,23 @@ class Self {
     }
 
     genAnnounceMessage() {
-        return Buffer.from(JSON.stringify({ id: this.clientId, action: constant.__AnnounceAction }))
+        return Buffer.from(JSON.stringify({ action: constant.__AnnounceAction }))
     }
 
     genAliveMessage() {
-        return Buffer.from(JSON.stringify({ id: this.clientId, action: constant.__AliveAction }))
+        return Buffer.from(JSON.stringify({ action: constant.__AliveAction }))
     }
 
     genAnswerMessage() {
-        return Buffer.from(JSON.stringify({ id: this.clientId, action: constant.__AnswerAction }))
+        return Buffer.from(JSON.stringify({ action: constant.__AnswerAction }))
     }
 
     genKnockMessage() {
-        return Buffer.from(JSON.stringify({ id: this.clientId, action: constant.__KnockAction }))
+        return Buffer.from(JSON.stringify({ action: constant.__KnockAction }))
+    }
+
+    genDisconnectMessage() {
+        return Buffer.from(JSON.stringify({ action: constant.__DisconnectAction }))
     }
 
     trackerAddr() {
