@@ -1,8 +1,8 @@
 const __AnnounceAction = "announce"
 const __AnnouncedAction = "announced"
 const __AliveAction = "alive"
-const __AlivedAction = "alived"
 const __AudiobufPrefix = "audiobuf"
+const __PushAction = "push"
 const __PushedAction = "pushed"
 const __KnockAction = "knock"
 const __IncomeAction = "income"
@@ -14,8 +14,8 @@ module.exports = {
     __AnnounceAction,
     __AnnouncedAction,
     __AliveAction,
-    __AlivedAction,
     __AudiobufPrefix,
+    __PushAction,
     __PushedAction,
     __KnockAction,
     __IncomeAction,
