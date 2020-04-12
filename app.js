@@ -1,12 +1,9 @@
 // Internal
-const dgram = require("dgram")
-const server = dgram.createSocket('udp4')
 const process = require('process')
 
 // Dependencies
-const fs = require("fs")
 const path = require("path")
-const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut, shell } = require("electron")
+const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut } = require("electron")
 const nativeImage = require("electron").nativeImage
 
 // Global
@@ -14,6 +11,7 @@ const Global = require("./src/core/storage/global")
 const appConfig = require("./src/config/app.json")
 let appDataPath = path.join(app.getPath("appData"), "Sobani")
 let configPath = path.join(appDataPath, "config.json")
+
 
 Global.Add("config", undefined)
 Global.Add("appConfig", appConfig)
@@ -24,15 +22,17 @@ Global.Add("configPath", configPath)
 const init = require("./src/core/init")
 const hash = require("./src/utils/hash")
 const audio = require("./src/core/audio")
-const peerSession = require("./src/core/peerSession")
+const PeerSession = require("./src/core/peersession")
 const Self = require("./src/core/session/session")
 const constant = require("./src/core/const")
 const Log = require("./src/core/log")
+const Server = require("./src/core/server")
 
 app.name = "Sobani"
 
 let tracker = undefined
 let self = new Self()
+let server = new Server()
 
 const nowTime = new Date().toString()
 const clientIdentity = hash.sha256(nowTime).substring(0, 8)
@@ -136,16 +136,10 @@ async function updateIndicatorToWindow(update) {
     window.webContents.send("indicator", update)
 }
 
-// Server Listening
-server.on('listening', () => {
-    const address = server.address()
-    console.log(`server listening ${address.address}:${address.port}`)
-})
+// Server listening
+server.start()
 
-// Server bind
-server.bind()
-
-// Application Quiting Function
+// Application quiting function
 function quitApp() {
     audio.quit()
     app.quit()
@@ -181,13 +175,15 @@ app.on("ready", () => {
     // Announce to tracker when user interface gets ready
     tracker = Global.Read("tracker")
     self.start(tracker.host, tracker.port, clientIdentity)
-    setInterval(() => {
-        if (!self.announced()) {
+    self.setAnnounceInterval(setInterval(() => {
+        if (!self.hasAnnounced()) {
             server.send(self.genAnnounceMessage(), self.trackerPort(), self.trackerAddr(), (err) => {
                 if (err) Log.fatal(err)
             })
+        } else {
+            self.clearAnnounceInterval()
         }
-    }, 1000)
+    }, constant.__AnnounceMessageIntervalMilliSec))
 })
 
 // Window close control
@@ -214,170 +210,152 @@ app.on("browser-window-blur", () => {
 })
 
 // Main
-server.on('message', (msg, rinfo) => {
-    if (msg.length >= 8 && msg.slice(0, 8).toString() === constant.__AudiobufPrefix) {
-        // todo: using audio session and audio-mixer
-        let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-        if (!remotePeer.disconnected) {
-            audio.opusDecoder.write(msg.slice(8))
-        } else {
-            Log.warning(`[${constant.__AudiobufPrefix}] Received ${constant.__AudiobufPrefix} from ${rinfo.address}:${rinfo.port}, ` + 
-            `however, Sobani cannot find this peer in previous record. This msg will be ignored.`)
-        }
-    } else {
-        try {
-            resp = JSON.parse(msg)
-            if (resp.action === constant.__AnnouncedAction) {
-                Log.debug(`[${resp.action}] Tracker assigned shareId is ${resp.data.shareId}`)
-                self.setShareId(resp.data.shareId)
-                updateAnnouncedToWindow(resp.data.shareId)
-                // keep alive with tracker
-                if (!self.isKeepingAlive()) {
-                    self.keepingAlive = true
-                    let aliveMessage = self.genAliveMessage()
-                    self.keepaliveInterval = setInterval(() => {
-                        server.send(aliveMessage, self.trackerPort(), self.trackerAddr(), (err) => {
-                            if (err) dialog.showErrorBox(err.message, err.stack)
-                        })
-                    }, 2000)
-                }
-            } else if (resp.action === constant.__PushedAction) {
-                // Server -> A
-                self.pushed = true
-                self.pushedInterval === undefined ? 0 : clearInterval(self.pushedInterval)
-                self.pushed = false
-                // "5.6.7.8:2333"
-                peeraddr_info = resp.data.peeraddr.split(":")
-                // B addr:port
-                let remotePeer = peerSession.findPeerOrInsert(peeraddr_info[0], peeraddr_info[1], resp.data.peerShareId)
-                Log.debug(`[${resp.action}] Remote peer resolved ${remotePeer.description()}`)
+server.on(constant.__AnnouncedAction, resp => {
+    Log.debug(`[${resp.action}] Tracker assigned shareId is ${resp.data.shareId}`)
+    self.setShareId(resp.data.shareId)
+    updateAnnouncedToWindow(resp.data.shareId)
+    // keep alive with tracker
+    if (!self.isKeepingAlive()) {
+        self.setKeepingAlive(true)
+        const aliveMessage = self.genAliveMessage()
+        self.setKeepAliveInterval(setInterval(() => {
+            server.send(aliveMessage, self.trackerPort(), self.trackerAddr(), (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+        }, constant.__AliveMessageIntervalMilliSec))
+    }
+})
 
-                // A -> NAT A -> NAT B -!> B
-                // NAT A will wait for B resp
-                const message = self.genKnockMessage()
-                server.send(message, remotePeer.port, remotePeer.addr, (err) => {
+server.on(constant.__PushedAction, (resp, remotePeer) => {
+    // Server -> A
+    // A -> NAT A -> NAT B -!> B
+    // NAT A will wait for B resp
+    self.setPushed(true)
+    self.clearPushInterval()
+    self.setPushed(false)
+    
+    Log.debug(`[${resp.action}] Remote peer resolved ${remotePeer.description()}`)
+
+    server.send(self.genKnockMessage(), remotePeer.port, remotePeer.addr, (err) => {
+        if (err) dialog.showErrorBox(err.message, err.stack)
+    })
+})
+
+server.on(constant.__KnockAction, (resp, remotePeer, rinfo) => {
+    if (remotePeer !== undefined) {
+        Log.debug(`[${resp.action}] Received ${resp.action} msg from peer ${remotePeer.description()}`)
+        if (!remotePeer.isKnocked()) {
+            const aliveMessage = self.genAliveMessage()
+            remotePeer.setAliveInterval(setInterval(() => {
+                server.send(aliveMessage, remotePeer.port, remotePeer.addr, (err) => {
                     if (err) dialog.showErrorBox(err.message, err.stack)
                 })
-            } else if (resp.action === constant.__KnockAction) {
-                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-                if (remotePeer !== undefined) {
-                    Log.debug(`[${resp.action}] Received ${resp.action} msg from peer ${remotePeer.description()}`)
-                    if (!remotePeer.knocked) {
-                        remotePeer.knockedInterval = setInterval(() => {
-                            const alivemessage = self.genAliveMessage()
-                            server.send(alivemessage, remotePeer.port, remotePeer.addr, (err) => {
-                                if (err) dialog.showErrorBox(err.message, err.stack)
-                            })
-                        }, 2000)
-                    }
-                    remotePeer.knocked = true
-                    remotePeer.disconnected = false
-                    remotePeer.updateLastSeen()
-                    updateToWindow(`peer knocked: ${msg} from ${remotePeer.shareId}`)
-                    updateIndicatorToWindow({ status: "connected", id: remotePeer.shareId })
-                    const message = self.genAnswerMessage()
-                    server.send(message, remotePeer.port, remotePeer.addr, (err) => {
-                        if (err) dialog.showErrorBox(err.message, err.stack)
-                    })
-                } else {
-                    Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                    `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
-                }
-            } else if (resp.action === constant.__IncomeAction) {
-                // Server -> B
-                // A addr:port
-                push_id_info = resp.data.peeraddr.split(":")
-
-                // A <- NAT A <- NAT B <- B
-                // Cus' NAT A is waiting for B resp
-                // so NAT A will forward this resp to A
-                // at this point
-                // connection between A and B will become active on NAT A
-                let remotePeer = peerSession.findPeerOrInsert(push_id_info[0], push_id_info[1], resp.data.peerShareId)
-                Log.debug(`[${resp.action}] Received ${resp.action} msg from tracker. Remote peer is ${remotePeer.description()}`)
-
-                const message = self.genKnockMessage()
-                updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
-                remotePeer.incomeInterval = setInterval(() => {
-                    if (!remotePeer.knocked) {
-                        server.send(message, remotePeer.port, remotePeer.addr, (err) => {
-                            if (err) dialog.showErrorBox(err.message, err.stack)
-                        })
-                    } else {
-                        clearInterval(remotePeer.incomeInterval)
-                        remotePeer.disconnected = false
-                        updateIndicatorToWindow({ status: "connected", id: resp.id })
-                    }
-                }, 1000)
-            } else if (resp.action === constant.__ChatAction) {
-                // todo: ChatSession
-                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-                if (remotePeer !== undefined) {
-                    Log.debug(`[${resp.action}] Received ${resp.action} msg, ${resp.msg} from ${remotePeer.shareId}`)
-                }  else {
-                    Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                    `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
-                }
-            } else if (resp.action === constant.__AnswerAction) {
-                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-                if (remotePeer !== undefined) {
-                    remotePeer.knocked = true
-                    remotePeer.disconnected = false
-
-                    Log.debug(`[${resp.action}] Received ${resp.action} msg from remote peer ${remotePeer.description()}`)
-
-                    updateToWindow(`peer answered: ${msg} from ${remotePeer.shareId}`)
-                    updateIndicatorToWindow({ status: "connected", id: remotePeer.shareId })
-
-                    remotePeer.aliveInterval = setInterval(() => {
-                        const alivemessage = self.genAliveMessage()
-                        server.send(alivemessage, remotePeer.port, remotePeer.addr, (err) => {
-                            if (err) dialog.showErrorBox(err.message, err.stack)
-                        })
-                    }, 2000)
-                } else {
-                    Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                    `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
-                }
-            } else if (resp.action === constant.__AliveAction) {
-                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-                if (remotePeer !== undefined) {
-                    remotePeer.updateLastSeen()
-
-                    // todo: display last seen on UI
-                    let date = new Date()
-                    // last seen at xxxxx
-                    window.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
-                    // updateIndicatorToWindow("connected")
-                    // If A(B) received "disconnect" action,
-                    // clear all intervals and disconnect the current session
-                } else {
-                    Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                    `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
-                }
-            } else if (resp.action === constant.__DisconnectAction) {
-                let remotePeer = peerSession.findPeer(rinfo.address, rinfo.port)
-                if (remotePeer !== undefined) {
-                    if (!remotePeer.disconnected) {
-                        // todo: disconnect with `remotePeer.shareId`
-                        updateIndicatorToWindow({ status: "disconnected" })
-                        remotePeer.disconnect()
-                        Log.debug(`[${resp.action}] Received ${resp.action} msg from remote peer ${remotePeer.description()}`)
-                    } else {
-                        Log.debug(`[${resp.action}] Received duplicated ${resp.action} msg from remote peer ${remotePeer.description()}. This msg will be ignored.`)
-                    }
-                } else {
-                    Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                    `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
-                }
-            } else {
-                Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
-                `however, Sobani cannot understand this action. This ${resp.action} msg will be ignored.`)
-            }
-        } catch (err) {
-            Log.warning(`[!] Received ${msg} from ${rinfo.address}:${rinfo.port}, ` + 
-            `however, Sobani cannot parse this msg. This msg will be ignored. ${err}`)
+            }, constant.__AliveMessageIntervalMilliSec))
         }
+        remotePeer.setKnocked(true)
+        remotePeer.setDisconnected(false)
+        remotePeer.updateLastSeen()
+        updateToWindow(`peer knocked from ${remotePeer.shareId}`)
+        updateIndicatorToWindow({ status: "connected", id: remotePeer.shareId })
+        server.send(self.genAnswerMessage(), remotePeer.port, remotePeer.addr, (err) => {
+            if (err) dialog.showErrorBox(err.message, err.stack)
+        })
+    } else {
+        Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
+    }
+})
+
+server.on(constant.__IncomeAction, (resp, remotePeer) => {
+    Log.debug(`[${resp.action}] Received ${resp.action} msg from tracker. Remote peer is ${remotePeer.description()}`)
+
+    const message = self.genKnockMessage()
+    updateToWindow(`prepare to connect to ${resp.data.peeraddr}`)
+    remotePeer.setIncomeInterval(setInterval(() => {
+        if (!remotePeer.isKnocked()) {
+            server.send(message, remotePeer.port, remotePeer.addr, (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+        } else {
+            remotePeer.clearIncomeInterval()
+            remotePeer.setDisconnected(false)
+            updateIndicatorToWindow({ status: "connected", id: remotePeer.shareId })
+        }
+    }, 1000))
+})
+
+server.on(constant.__ChatAction, (resp, remotePeer, rinfo) => {
+    // todo: ChatSession
+    if (remotePeer !== undefined) {
+        Log.debug(`[${resp.action}] Received ${resp.action} msg, ${resp.msg} from ${remotePeer.shareId}`)
+    }  else {
+        Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
+    }
+})
+
+server.on(constant.__AnswerAction, (resp, remotePeer, rinfo) => {
+    if (remotePeer !== undefined) {
+        remotePeer.setKnocked(true)
+        remotePeer.setDisconnected(false)
+
+        Log.debug(`[${resp.action}] Received ${resp.action} msg from remote peer ${remotePeer.description()}`)
+
+        updateToWindow(`peer answered from ${remotePeer.shareId}`)
+        updateIndicatorToWindow({ status: "connected", id: remotePeer.shareId })
+
+        const aliveMessage = self.genAliveMessage()
+        remotePeer.setAliveInterval(setInterval(() => {
+            server.send(aliveMessage, remotePeer.port, remotePeer.addr, (err) => {
+                if (err) dialog.showErrorBox(err.message, err.stack)
+            })
+        }, constant.__AliveMessageIntervalMilliSec))
+    } else {
+        Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
+    }
+})
+
+server.on(constant.__AliveAction, (resp, remotePeer, rinfo) => {
+    if (remotePeer !== undefined) {
+        remotePeer.updateLastSeen()
+
+        // todo: display last seen on UI
+        let date = new Date()
+        // last seen at xxxxx
+        window.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
+        // updateIndicatorToWindow("connected")
+        // If A(B) received "disconnect" action,
+        // clear all intervals and disconnect the current session
+    } else {
+        Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
+    }
+})
+
+server.on(constant.__DisconnectAction, (resp, remotePeer, rinfo) => {
+    if (remotePeer !== undefined) {
+        if (!remotePeer.isDisconnected()) {
+            // todo: disconnect with `remotePeer.shareId`
+            updateIndicatorToWindow({ status: "disconnected" })
+            remotePeer.disconnect()
+            Log.debug(`[${resp.action}] Received ${resp.action} msg from remote peer ${remotePeer.description()}`)
+        } else {
+            Log.debug(`[${resp.action}] Received duplicated ${resp.action} msg from remote peer ${remotePeer.description()}. This msg will be ignored.`)
+        }
+    } else {
+        Log.warning(`[${resp.action}] Received ${resp.action} msg from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This ${resp.action} msg will be ignored.`)
+    }
+})
+
+server.on(constant.__AudiobufPrefix, (buffer, remotePeer) => {
+    // todo: using audio session and audio-mixer
+    if (!remotePeer.isDisconnected()) {
+        audio.opusDecoder.write(msg.slice(constant.__AudiobufPrefixLength))
+    } else {
+        Log.warning(`[${constant.__AudiobufPrefix}] Received ${constant.__AudiobufPrefix} from ${rinfo.address}:${rinfo.port}, ` + 
+        `however, Sobani cannot find this peer in previous record. This msg will be ignored.`)
     }
 })
 
@@ -395,7 +373,7 @@ audio.opusDecoder.on('data', async buf => {
 
 // Opus Encoder
 audio.opusEncoder.on('data', buf => {
-    let connectedPeers = peerSession.connectedPeers()
+    let connectedPeers = PeerSession.connectedPeers()
     if (connectedPeers.length > 0) {
         connectedPeers.map(peer => {
             server.send(Buffer.concat([audioPrefix, buf]), peer.port, peer.addr, err => {
@@ -409,21 +387,20 @@ ipcMain.on("connect", (event, args) => {
     // Connection
     Log.debug(`Trying to retrieve ${args.trim()}'s addr and port from tracker`)
     const pushMessage = Buffer.from(JSON.stringify({ shareId: args.trim(), action: constant.__PushAction }))
-    self.pushed = false
-    self.pushedInterval = setInterval(function () {
-        if (!self.pushed) {
+    self.setPushed(false)
+    self.setPushInterval(setInterval(() => {
+        if (!self.hasPushed()) {
             server.send(pushMessage, self.trackerPort(), self.trackerAddr(), (err) => {
                 if (err) dialog.showErrorBox(err.message, err.stack)
             })
         }
-    }, 1000)
+    }, 1000))
 })
 
 ipcMain.on("disconnect", (event, args) => {
-    // todo: disconnect with `shareId`
     let shareId = args.trim()
     Log.debug(`[disconnect] from UI, request disconnect with ${shareId}`)
-    let remotePeer = peerSession.findPeerByShareId(shareId)
+    let remotePeer = PeerSession.findPeerByShareId(shareId)
     if (remotePeer !== undefined) {
         remotePeer.disconnect()
         const disconnectMessage = self.genDisconnectMessage()
