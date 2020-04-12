@@ -10,8 +10,9 @@ let self = {
     announced: false,
     keepingAlive: false,
 
-    pushedInterval: undefined,
-    keepaliveInterval: undefined,
+    announceInterval: undefined,
+    pushInterval: undefined,
+    keepAliveInterval: undefined,
 }
 
 class Self {
@@ -19,23 +20,38 @@ class Self {
 
     }
 
-    start(trackerAddr, trackerPort, clientId) {
+    start(trackerAddr, trackerPort, shareId) {
         if (trackerAddr === undefined) {
             Log.fatal("trackerAddr is undefined")
         }
         Log.debug(`Tracker set to ${trackerAddr}:${trackerPort}`)
         self.trackerAddr = trackerAddr
         self.trackerPort = trackerPort
-        self.shareId = clientId
-    }
-
-    setShareId(shareId) {
-        self.announced = true
         self.shareId = shareId
     }
 
-    announced() {
+    setShareId(shareId) {
+        this.setAnnounced(true)
+        self.shareId = shareId
+    }
+
+    hasAnnounced() {
         return self.announced
+    }
+
+    setAnnounced(announced) {
+        self.announced = announced
+    }
+
+    setAnnounceInterval(announceInterval) {
+        self.announceInterval = announceInterval
+    }
+
+    clearAnnounceInterval() {
+        if (self.announceInterval !== undefined) {
+            clearInterval(self.announceInterval)
+            self.announceInterval = undefined
+        }
     }
 
     genAnnounceMessage() {
@@ -70,7 +86,39 @@ class Self {
         return self.keepingAlive
     }
 
+    setKeepingAlive(keepingAlive) {
+        self.keepingAlive = keepingAlive
+    }
 
+    setKeepAliveInterval(keepAliveInterval) {
+        self.keepAliveInterval = keepAliveInterval
+    }
+
+    clearKeepAliveInterval() {
+        if (self.keepAliveInterval !== undefined) {
+            clearInterval(self.keepAliveInterval)
+            self.keepAliveInterval = undefined
+        }
+    }
+
+    hasPushed() {
+        return self.pushed
+    }
+
+    setPushed(pushed) {
+        self.pushed = pushed
+    }
+
+    setPushInterval(pushInterval) {
+        self.pushInterval = pushInterval
+    }
+
+    clearPushInterval() {
+        if (self.pushInterval !== undefined) {
+            clearInterval(self.pushInterval)
+            self.pushInterval = undefined
+        }
+    }
 }
 
 module.exports = Self
