@@ -1,4 +1,40 @@
 {
     "development": true,
-    "debug": false
+    "debug": false,
+    "provider": [
+        {
+            "type": "api",
+            "group": "module",
+            "alias": "CloudMusic API",
+            "name": "cloudmusicapi",
+            "endpoint": {
+                "host": "https://api.ayaka.moe",
+                "port": 0,
+                "path": "/cloudmusic"
+            },
+            "mct": {
+                "accept": ["json"],
+                "respond": ["json"]
+            },
+            "env": [],
+            "plugin": false
+        },
+        {
+            "type": "api",
+            "group": "module",
+            "alias": "Bilibili API",
+            "name": "bilibiliapi",
+            "endpoint": {
+                "host": "https://api.bilibili.com",
+                "port": 443,
+                "path": ""
+            },
+            "mct": {
+                "accept": ["json"],
+                "respond": ["json", "video/x-flv"]
+            },
+            "env": [],
+            "plugin": false
+        }
+    ]
 }
