@@ -3,7 +3,7 @@ const process = require('process')
 
 // Dependencies
 const path = require("path")
-const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut, shell } = require("electron")
+const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut } = require("electron")
 const nativeImage = require("electron").nativeImage
 
 // Global
@@ -11,6 +11,7 @@ const Global = require("./src/core/storage/global")
 const appConfig = require("./src/config/app.json")
 let appDataPath = path.join(app.getPath("appData"), "Sobani")
 let configPath = path.join(appDataPath, "config.json")
+
 
 Global.Add("config", undefined)
 Global.Add("appConfig", appConfig)
