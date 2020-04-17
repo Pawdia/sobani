@@ -1,10 +1,22 @@
 {
   "name": "sobani",
-  "productName": "Sobani",
-  "version": "0.1.2",
-  "main": "app.js",
-  "repository": "https://github.com/Pawdia/sobani",
-  "author": "Ayaka Neko",
+  "version": "1.10.0",
+  "description": "",
+  "license": "MIT",
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pawdia/sobani.git"
+  },
+  "homepage": "https://github.com/Pawdia/sobani",
+  "bugs": {
+    "url": "https://github.com/Pawdia/sobani/issues"
+  },
+  "author": {
+    "name": "Ayaka Neko",
+    "email": "neko@ayaka.moe",
+    "url": "https://neko.ayaka.moe"
+  },
   "contributor": [
     {
       "name": "Cocoa Kaori",
@@ -12,12 +24,13 @@
       "url": "https://await.moe"
     }
   ],
-  "license": "MIT",
-  "scripts": {
-    "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder --publish=never"
+  "keywords": [],
+  "engines": {
+    "node": ">=9.0.0",
+    "npm": ">=5.0.0",
+    "yarn": ">=1.0.0"
   },
+  "productName": "Sobani",
   "build": {
     "appId": "moe.ayaka.sobani",
     "mac": {
@@ -25,16 +38,50 @@
     },
     "icon": "./build/icon.png"
   },
-  "devDependencies": {
-    "electron": "^8.2.0",
-    "electron-builder": "^22.4.1",
-    "electron-packager": "^14.2.1",
-    "electron-rebuild": "^1.10.1"
+  "browserslist": [
+    "last 4 versions"
+  ],
+  "main": "app.js",
+  "scripts": {
+    "prod": "cross-env NODE_ENV=production webpack --mode production --config webpack.build.config.js && electron --noDevServer .",
+    "start": "cross-env NODE_ENV=development webpack-dev-server --hot --host 0.0.0.0 --config=./webpack.dev.config.js --mode development",
+    "build": "cross-env NODE_ENV=production webpack --config webpack.build.config.js --mode production",
+    "package": "npm run build",
+    "postpackage": "electron-packager ./ --out=./builds",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --publish=never"
   },
   "dependencies": {
     "@discordjs/opus": "^0.1.0",
-    "log4js": "^6.1.2",
+    "electron-builder": "^22.5.1",
+    "log4js": "^6.2.0",
     "naudiodon": "^2.1.2",
-    "prism-media": "^1.2.1"
+    "prism-media": "^1.2.1",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.9.0",
+    "@babel/preset-react": "^7.9.4",
+    "babel-loader": "^8.1.0",
+    "babili-webpack-plugin": "^0.1.2",
+    "cross-env": "^7.0.2",
+    "css-loader": "^3.4.2",
+    "electron": "^8.2.0",
+    "electron-devtools-installer": "^2.2.4",
+    "electron-packager": "^14.2.1",
+    "electron-rebuild": "^1.10.1",
+    "file-loader": "^6.0.0",
+    "html-webpack-plugin": "^4.0.1",
+    "mini-css-extract-plugin": "^0.9.0",
+    "postcss-import": "^12.0.1",
+    "postcss-loader": "^3.0.0",
+    "postcss-nested": "^4.2.1",
+    "postcss-preset-env": "^6.7.0",
+    "postcss-pxtorem": "^4.0.1",
+    "style-loader": "^1.1.3",
+    "webpack": "^4.42.1",
+    "webpack-cli": "^3.3.11",
+    "webpack-dev-server": "^3.10.3"
   }
 }

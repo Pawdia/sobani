@@ -2,6 +2,7 @@
 const process = require('process')
 
 // Dependencies
+const url = require("url")
 const path = require("path")
 const { app, Menu, Tray, BrowserWindow, ipcMain, dialog, globalShortcut } = require("electron")
 const nativeImage = require("electron").nativeImage
@@ -47,14 +48,32 @@ const isLinux = process.platform === 'linux'
 // const isFreeBSD = process.platform === 'freebsd'
 // const isOpenBSD = process.platform === 'openbsd'
 
+if (isWin) {
+    app.commandLine.appendSwitch('high-dpi-support', 'true')
+    app.commandLine.appendSwitch('force-device-scale-factor', '1')
+}
+
 // Image and Icon
 let icon = nativeImage.createFromPath(path.join(__dirname, "src/assets/icon.png"))
 let trayIcon = nativeImage.createFromPath(path.join(__dirname, "src/assets/tray.png"))
 let tray = undefined
-let window = undefined
+
+/************     From boilerplate     ***********/
+
+// Keep a global reference of the window object, if you don't, the window will
+// be closed automatically when the JavaScript object is garbage collected.
+let mainWindow
+
+// Keep a reference for dev mode
+let dev = false
+
+if (process.env.NODE_ENV !== undefined && process.env.NODE_ENV === 'development') {
+    dev = true
+}
 
 function createWindow() {
-    window = new BrowserWindow({
+    // Create the browser window.
+    mainWindow = new BrowserWindow({
         width: 800,
         height: 600,
         title: "Sobani",
@@ -62,21 +81,57 @@ function createWindow() {
         icon: icon,
         resizable: false,
         webPreferences: {
-            // nodeIntegration: true,
-            contextIsolation: true, // protect against prototype pollution
+            nodeIntegration: true,
+            // contextIsolation: true, // protect against prototype pollution
             enableRemoteModule: false, // turn off remote
             preload: path.join(__dirname, "preload.js") // use a preload script
         }
     })
 
-    // Set Icon
-    // window.setIcon(path.join(__dirname, "src/assets/icon.png"))
+    // and load the index.html of the app.
+    let indexPath
 
-    // Load start up page
-    window.loadFile("index.html")
+    if (dev && process.argv.indexOf('--noDevServer') === -1) {
+        indexPath = url.format({
+            protocol: 'http:',
+            host: 'localhost:8080',
+            pathname: 'index.html',
+            slashes: true
+        })
+    } else {
+        indexPath = url.format({
+            protocol: 'file:',
+            pathname: path.join(__dirname, 'dist', 'index.html'),
+            slashes: true
+        })
+    }
+
+    mainWindow.loadURL(indexPath)
+
+    // Don't show until we are ready and loaded
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show()
+
+        // Open the DevTools automatically if developing
+        if (dev) {
+            const { default: installExtension, REACT_DEVELOPER_TOOLS } = require('electron-devtools-installer')
+
+            installExtension(REACT_DEVELOPER_TOOLS)
+                .catch(err => console.log('Error loading React DevTools: ', err))
+            mainWindow.webContents.openDevTools()
+        }
+    })
+
+    // Emitted when the window is closed.
+    mainWindow.on('closed', function () {
+        // Dereference the window object, usually you would store windows
+        // in an array if your app supports multi windows, this is the time
+        // when you should delete the corresponding element.
+        mainWindow = null
+    })
 
     // Open DevTools
-    // window.webContents.openDevTools()
+    mainWindow.webContents.openDevTools()
 }
 
 let TrayMenu = [
@@ -119,21 +174,21 @@ function createTray() {
 }
 
 async function toggleWindow() {
-    window.isVisible() ? window.hide() : window.show()
+    mainWindow.isVisible() ? mainWindow.hide() : mainWindow.show()
 }
 
 async function updateToWindow(info) {
-    window.webContents.send("control", info)
+    mainWindow.webContents.send("control", info)
 }
 
 async function updateAnnouncedToWindow(shareId) {
-    window.webContents.send("announced", shareId)
+    mainWindow.webContents.send("announced", shareId)
 }
 
 async function updateIndicatorToWindow(update) {
     update.status === "connected" ? disconnected = false : 0
     update.status === "disconnected" ? disconnected = true : 0
-    window.webContents.send("indicator", update)
+    mainWindow.webContents.send("indicator", update)
 }
 
 // Server listening
@@ -147,10 +202,10 @@ function quitApp() {
 
 Global.Add("quitApp", quitApp)
 
-// When ready
-app.on("ready", () => {
-    let configErrored = false
-
+// This method will be called when Electron has finished
+// initialization and is ready to create browser windows.
+// Some APIs can only be used after this event occurs.
+app.on('ready', () => {
     createTray()
     createWindow()
 
@@ -161,16 +216,16 @@ app.on("ready", () => {
         init.standard()
     }
     
-    // Key control
-    // macOS or Linux Command + Q
-    globalShortcut.register('CommandOrControl+Q', quitApp)
-    // Windows & Linux
-    globalShortcut.register('Alt+F4', quitApp)
-    // Disable refresh
-    if (!appConfig.development) {
-        globalShortcut.register("CommandOrControl+R", () => { return undefined })
-        globalShortcut.register("F5", () => { return undefined })
-    }
+    // // Key control
+    // // macOS or Linux Command + Q
+    // globalShortcut.register('CommandOrControl+Q', quitApp)
+    // // Windows & Linux
+    // globalShortcut.register('Alt+F4', quitApp)
+    // // Disable refresh
+    // if (!appConfig.development) {
+    //     globalShortcut.register("CommandOrControl+R", () => { return undefined })
+    //     globalShortcut.register("F5", () => { return undefined })
+    // }
     
     // Announce to tracker when user interface gets ready
     tracker = Global.Read("tracker")
@@ -186,19 +241,23 @@ app.on("ready", () => {
     }, constant.__AnnounceMessageIntervalMilliSec))
 })
 
-// Window close control
-app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-        audio.quit()
+// Quit when all windows are closed.
+app.on('window-all-closed', () => {
+    // On macOS it is common for applications and their menu bar
+    // to stay active until the user quits explicitly with Cmd + Q
+    if (process.platform !== 'darwin') {
         app.quit()
+        audio.quit()
     }
 })
 
-// Window activated
-app.on("active", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
+app.on('activate', () => {
+    // On macOS it's common to re-create a window in the app when the
+    // dock icon is clicked and there are no other windows open.
+    if (BrowserWindow.getAllWindows().length === 0 || mainWindow === null) {
         createWindow()
     }
+
     TrayMenu[0].label = "Hide"
     tray.setContextMenu(Menu.buildFromTemplate(TrayMenu))
 })
@@ -323,7 +382,7 @@ server.on(constant.__AliveAction, (resp, remotePeer, rinfo) => {
         // todo: display last seen on UI
         let date = new Date()
         // last seen at xxxxx
-        window.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
+        mainWindow.webContents.send("lastseen", [date.getHours(), date.getMinutes(), date.getSeconds()].join(':'))
         // updateIndicatorToWindow("connected")
         // If A(B) received "disconnect" action,
         // clear all intervals and disconnect the current session
