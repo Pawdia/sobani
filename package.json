@@ -53,7 +53,7 @@
   },
   "postinstall": "electron-builder install-app-deps",
   "dependencies": {
-    "@discordjs/opus": "^0.1.0",
+    "@discordjs/opus": "^0.8.0",
     "dns-packet": "5.2.2",
     "log4js": "^6.2.0",
     "naudiodon": "^2.1.2",
